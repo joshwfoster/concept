@@ -1079,7 +1079,6 @@ class TensorField:
     # Method for adding the grids together
     @cython.pheader(
         rhs = object,
-        weight = 'double',
         field_ptr = 'double*',
         source_ptr = 'double*',
         index='Py_ssize_t',
@@ -1088,7 +1087,7 @@ class TensorField:
         source_scalar = 'FluidScalar',
         Δx = 'double',
     )
-    def add_laplacian(self, rhs, weight):
+    def add_laplacian(self, rhs):
         Δx = boxsize/self.gridsize/ units.Mpc/light_speed * units.Gyr
 
         for multi_index in self.fluidvar.multi_indices:
@@ -1099,7 +1098,7 @@ class TensorField:
             source_ptr = cython.address(spectral_laplacian(source_scalar.grid_mv)[:, :, :])
 
             for index in range(self.size):
-                field_ptr[index] += source_ptr[index]*weight
+                field_ptr[index] += source_ptr[index]
 
     # Method for adding component sources to the tensor girds
     @cython.pheader(
@@ -1119,19 +1118,15 @@ class TensorField:
         J2_ptr = 'double*',
     )
     def add_source(self, component):
+
+        a = universals.a
+        w = component.w(a=universals.a)
+        w_eff = component.w_eff(a = universals.a)
+
         if component.original_representation ==  'particles':
-            a = universals.a
-            w = component.w(a=universals.a)
-            w_eff = component.w_eff(a = universals.a)
-
-
             self.add(component.fluidvars[2], a**3)
 
         else:
-            a = universals.a
-            w = component.w(a=universals.a)
-            w_eff = component.w_eff(a = universals.a)
-
             # Prefactors that we will reuse. a**4 comes from lowering the index on J
             JJ_prefactor = 1. / (1. + w) * a**(-2 + 3 * w_eff) * a**4
 
@@ -1158,7 +1153,6 @@ class TensorField:
                     for index in range(self.size):
                         field_ptr[index] += JJ_prefactor * J1_ptr[index] * J2_ptr[index] / rho_ptr[index]
 
-
 @cython.cclass
 class TensorComponent:
     """ This object represents a collection of u_{ij} and du_{ij} metric perturbations
@@ -1173,67 +1167,62 @@ class TensorComponent:
         """
         public Py_ssize_t gridsize
         public TensorField u
-        public TensorField du
+        public TensorField ddu
         """        
 
         self.gridsize = gridsize
         self.u = TensorField(gridsize=gridsize)
-        self.du = TensorField(gridsize=gridsize)
+        self.ddu = TensorField(gridsize=gridsize)
 
     @cython.pheader( 
         # Arguments
         rhs_evals='object',
+        forward_step='bint',
         Δt='double'
     )
-    def update(self, rhs_evals, Δt):
-        if len(rhs_evals) == 4:
-            self.adams_bashforth(rhs_evals, Δt)
+    def update(self, rhs_evals, forward_step, Δt):
+        if forward_step:
+            masterprint('Forward Step for U_{ij}')
+            self.forward_step(rhs_evals, Δt)
         else:
-            self.adams_moulton(rhs_evals, Δt)
+            masterprint('Backward Step for U_{ij}')
+            self.backward_step(rhs_evals, Δt)
 
     @cython.header( 
         # Arguments
         rhs_evals='object',
         Δt='double'
     )
-    def adams_bashforth(self, rhs_evals, Δt):
+    def forward_step(self, rhs_evals, Δt):
+        self.u.add(rhs_evals[0].ddu.fluidvar, Δt*Δt*(19./240.))
+        self.u.add(rhs_evals[1].ddu.fluidvar, Δt*Δt*(-2./5.))
+        self.u.add(rhs_evals[2].ddu.fluidvar, Δt*Δt*(97./120.))
+        self.u.add(rhs_evals[3].ddu.fluidvar, Δt*Δt*(-11./15.))
+        self.u.add(rhs_evals[4].ddu.fluidvar, Δt*Δt*(299./240.))
 
-        self.u.add(rhs_evals[0].u.fluidvar, Δt * -9./24.)
-        self.u.add(rhs_evals[1].u.fluidvar, Δt * 37./24.)
-        self.u.add(rhs_evals[2].u.fluidvar, Δt * -59./24.)
-        self.u.add(rhs_evals[3].u.fluidvar, Δt * 55./24.)
-
-        self.du.add(rhs_evals[0].du.fluidvar, Δt * -9./24.)
-        self.du.add(rhs_evals[1].du.fluidvar, Δt * 37./24.)
-        self.du.add(rhs_evals[2].du.fluidvar, Δt * -59./24.)
-        self.du.add(rhs_evals[3].du.fluidvar, Δt * 55./24.)
+        self.u.add(rhs_evals[4].u.fluidvar, 2.)
+        self.u.add(rhs_evals[3].u.fluidvar, -1.)
 
         self.u.communicate_fluid_grids('=')
-        self.du.communicate_fluid_grids('=')
 
     @cython.header( 
         # Arguments
-        rhs_evals=list,
+        rhs_evals='object',
         Δt='double'
     )
-    def adams_moulton(self, rhs_evals, Δt):
-        self.u.add(rhs_evals[0].u.fluidvar, Δt * (-19./720.  + 9./24.))
-        self.u.add(rhs_evals[1].u.fluidvar, Δt * (106./720.  - 37./24.))
-        self.u.add(rhs_evals[2].u.fluidvar, Δt * (-264./720. + 59./24.))
-        self.u.add(rhs_evals[3].u.fluidvar, Δt * (646./720.  - 55./24.))
-        self.u.add(rhs_evals[4].u.fluidvar, Δt * (251./720.))
+    def backward_step(self, rhs_evals, Δt):
+        self.u.add(rhs_evals[0].ddu.fluidvar, Δt*Δt*(-1./240.))
+        self.u.add(rhs_evals[1].ddu.fluidvar, Δt*Δt*(1./60.))
+        self.u.add(rhs_evals[2].ddu.fluidvar, Δt*Δt*(7./120.))
+        self.u.add(rhs_evals[3].ddu.fluidvar, Δt*Δt*(17./20.))
+        self.u.add(rhs_evals[4].ddu.fluidvar, Δt*Δt*(19./240.))
 
-        self.du.add(rhs_evals[0].du.fluidvar, Δt * (-19./720.  + 9./24.))
-        self.du.add(rhs_evals[1].du.fluidvar, Δt * (106./720.  - 37./24.))
-        self.du.add(rhs_evals[2].du.fluidvar, Δt * (-264./720. + 59./24.))
-        self.du.add(rhs_evals[3].du.fluidvar, Δt * (646./720.  - 55./24.))
-        self.du.add(rhs_evals[4].du.fluidvar, Δt * (251./720.))
+        self.u.add(rhs_evals[3].u.fluidvar, 2.)
+        self.u.add(rhs_evals[2].u.fluidvar, -1.)
 
         self.u.communicate_fluid_grids('=')
-        self.du.communicate_fluid_grids('=')
 
-
-    @cython.pheader(
+    @cython.pheader( 
         state = 'TensorComponent',
         components = 'list',
         index = 'Py_ssize_t',
@@ -1241,18 +1230,24 @@ class TensorComponent:
         R = 'double',
         Rpp = 'double',
     )
-    def source(self, state, components, R, Rpp):
-
-        self.u.add(state.du.fluidvar, 1)
-        
-        self.du.add(state.u.fluidvar, Rpp/R)
-        self.du.add_laplacian(state.u.fluidvar, 1)
+    def source(self, components, R, Rpp):
+        self.ddu.add(self.u.fluidvar, Rpp/R)
+        self.ddu.add_laplacian(self.u.fluidvar)
         
         for component in components:
-            self.du.add_source(component)
+            self.ddu.add_source(component)
 
-        self.u.communicate_fluid_grids('=')
-        self.du.communicate_fluid_grids('=')
+        self.ddu.communicate_fluid_grids('=')
+
+    # This method will grow/shrink the data attributes
+    @cython.pheader(
+        # Arguments
+        size_or_shape_noghosts=object,  # Py_ssize_t or tuple
+    )
+    def resize(self, size_or_shape_noghosts):
+        self.u.resize(size_or_shape_noghosts)
+        self.ddu.resize(size_or_shape_noghosts)
+
 
 
 # The class governing any component of the universe
