@@ -1708,42 +1708,6 @@ def convert_particles_to_fluid(component, order):
             ς_dim = component.ς[dim1, dim2]
             interpolate_particles(component, gridsize, ς_dim.grid_mv, 'S' + 'xyz'[dim1] + 'xyz'[dim2], order, ᔑdt)
 
-    # The interpolation may have left some cells empty. Count up the
-    # number of such vacuum cells and add to each a density of
-    # ρ_vacuum, while leaving the momentum at zero. This will increase
-    # the total mass, which then has to be lowered again, which we do
-    # by subtracting a constant amount from each cell. This subtraction
-    # may itself produce vacuum cells, and so we need to repeat until
-    # no vacuum is detected.
-    for vacuum_sweep in range(gridsize):
-        # Count up and assign to vacuum cells
-        N_vacuum = 0
-        for         i in range(nghosts, ℤ[ϱ.shape[0] - nghosts]):
-            for     j in range(nghosts, ℤ[ϱ.shape[1] - nghosts]):
-                for k in range(nghosts, ℤ[ϱ.shape[2] - nghosts]):
-                    if ϱ[i, j, k] < ρ_vacuum:
-                        N_vacuum += 1
-                        ϱ[i, j, k] += ρ_vacuum
-        N_vacuum = allreduce(N_vacuum, op=MPI.SUM)
-        # Remember the original number of vacuum cells
-        if vacuum_sweep == 0:
-            N_vacuum_originally = N_vacuum
-        # We are done when no vacuum is left
-        if N_vacuum == 0:
-            break
-        # Ensure mass conservation
-        Δϱ_each = N_vacuum*ℝ[ρ_vacuum/gridsize**3]
-        for         i in range(nghosts, ℤ[ϱ.shape[0] - nghosts]):
-            for     j in range(nghosts, ℤ[ϱ.shape[1] - nghosts]):
-                for k in range(nghosts, ℤ[ϱ.shape[2] - nghosts]):
-                    ϱ[i, j, k] -= Δϱ_each
-    else:
-        # Failed to remove vacuum
-        masterwarn(
-            'The convert_particles_to_fluid() function was unable to '
-            'get rid of vacuum cells in the fluid after interpolation'
-        )
-    # Populate ghost points of all fluid grids
     component.communicate_fluid_grids('=')
 
     return N_vacuum_originally

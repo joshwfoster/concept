@@ -242,11 +242,11 @@ def timeloop():
     ###   Set up the Information for the Fixed Conformal Step Size   ###
     ####################################################################
 
-    dConfTime = .0006523127554334868 # Hacky insertion
+    dConfTime = 1e-3 # Hacky insertion
     ConfTime = a_to_tau(universals.a)
 
     # Hacky insertion for the number of steps
-    for step_index in range(70000):
+    for step_index in range(3475):
 
         ##########################################################################
         ###   Here we define the time-step taking during this loop iteration   ###
@@ -255,6 +255,7 @@ def timeloop():
         # Calculate the time step size based on the desired conformal time step
         Δt = cosmic_time(tau_to_a(ConfTime + dConfTime)) - cosmic_time(tau_to_a(ConfTime))
         sync_time = universals.t + Δt
+        ConfTime = a_to_tau(scale_factor(sync_time))
 
         # Update the time-stepping bookkeeping
         time_step_previous = time_step
@@ -266,7 +267,8 @@ def timeloop():
             Δt_print = sync_time - universals.t
 
         print_timestep_heading(time_step, Δt_print, bottleneck, components)
-
+        masterprint('Conformal Time:', ConfTime)
+     
         ##################################################################################
         ###   Here we perform the predictor step for the u_{ij} evolution and update   ###
         ###   the fluid decays by a half timestep using the exitng particle meshes     ###
@@ -435,7 +437,7 @@ def timeloop():
         time_step_last_sync = time_step
 
         # Perform the dump if desired
-        if time_step % 100 == 0:
+        if time_step % 100 == 0 or time_step % 100 == 1:
             dump_time = DumpTime('a', t=None, a = universals.a)
             dump(components, rhs_evals[4], output_filenames, dump_time, Δt)
 

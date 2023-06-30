@@ -78,12 +78,15 @@ def source_decay(donor_component, receiver_component, a1, a2):
     # The donor scalar and grid
     donor_scalar = donor_component.ϱ
     donor_grid = donor_scalar.grid
-    donor_rho_total = measure(donor_component, 'ϱ')[0] * donor_component.gridsize**3
+    donor_rho_total = donor_component._ϱ_bar
 
     # The receiver scalar and grid    
     receiver_scalar = receiver_component.ϱ
     receiver_grid = receiver_scalar.grid
-    receiver_rho_total = measure(receiver_component, 'ϱ')[0] * receiver_component.gridsize**3
+    receiver_rho_total = receiver_component._ϱ_bar
+
+    masterprint('Donor Rho Total: ', donor_rho_total)
+    masterprint('Receiver Rho Total: ', receiver_rho_total)
 
     # Here we calculate how much to homogeneously rescale out of the receiver density
     w = receiver_component.w(a=a1)
@@ -97,6 +100,7 @@ def source_decay(donor_component, receiver_component, a1, a2):
   
     # This is how much total we took away from the receiver grid
     add_factor = (1-rescale_factor) * receiver_rho_total / donor_rho_total
+    masterprint('Density Addition Factor: ', add_factor)
     
     for index in range(receiver_component.size):
         receiver_grid[index] *= rescale_factor
