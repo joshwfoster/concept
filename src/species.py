@@ -1127,35 +1127,31 @@ class TensorField:
         w = component.w(a=universals.a)
         w_eff = component.w_eff(a = universals.a)
 
-        if component.original_representation ==  'particles':
-            self.add(component.fluidvars[2], a**3)
+        # Prefactors that we will reuse. a**4 comes from lowering the index on J
+        JJ_prefactor = 1. / (1. + w) * a**(-2 + 3 * w_eff) * a**4
 
-        else:
-            # Prefactors that we will reuse. a**4 comes from lowering the index on J
-            JJ_prefactor = 1. / (1. + w) * a**(-2 + 3 * w_eff) * a**4
+        # Pointer to fluid density grid
+        rho_scalar = component.ϱ
+        rho_ptr = rho_scalar.grid
 
-            # Pointer to fluid density grid
-            rho_scalar = component.ϱ
-            rho_ptr = rho_scalar.grid
+        # Now add the fluid momentum density contribution
+        for dim1 in range(3):
+            for dim2 in range(3):
 
-            # Now add the fluid momentum density contribution
-            for dim1 in range(3):
-                for dim2 in range(3):
-
-                    # Momentum density scalars
-                    J1_scalar = component.J[dim1]
-                    J2_scalar = component.J[dim2]
+                # Momentum density scalars
+                J1_scalar = component.J[dim1]
+                J2_scalar = component.J[dim2]
             
-                    # Momentum density pointers
-                    J1_ptr = J1_scalar.grid
-                    J2_ptr = J2_scalar.grid 
+                # Momentum density pointers
+                J1_ptr = J1_scalar.grid
+                J2_ptr = J2_scalar.grid 
 
-                    # Pointer to the field we add to
-                    field_scalar = self.fluidvar[dim1, dim2]
-                    field_ptr = field_scalar.grid
+                # Pointer to the field we add to
+                field_scalar = self.fluidvar[dim1, dim2]
+                field_ptr = field_scalar.grid
 
-                    for index in range(self.size):
-                        field_ptr[index] += JJ_prefactor * J1_ptr[index] * J2_ptr[index] / rho_ptr[index]
+                for index in range(self.size):
+                    field_ptr[index] += JJ_prefactor * J1_ptr[index] * J2_ptr[index] / rho_ptr[index]
 
 @cython.cclass
 class TensorComponent:
@@ -1970,8 +1966,8 @@ class Component:
         self.boltzmann_order = boltzmann_order
 
         if self.representation == 'particles':
-            # Manually set the boltzmann order to 2 so that we can mesh the T_{ij}
-            self.boltzmann_order = 2
+            # Manually set the boltzmann order to 1 so that we do not mesh the T_{ij}
+            self.boltzmann_order = 1
 
         elif self.representation == 'fluid':
             if self.boltzmann_order < -1:
