@@ -187,7 +187,7 @@ class ConceptSnapshot:
                         f'with representation "{component.representation}"'
                     )
 
-                if component.original_representation == 'particles':
+                if component.representation == 'particles':
 
                     N, N_local = component.N, component.N_local
                     N_lin = cbrt(N)
