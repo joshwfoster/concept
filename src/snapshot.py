@@ -157,18 +157,6 @@ class ConceptSnapshot:
                 slab_end = slab_start + slab.shape[0]
                 fluidscalar_h5[slab_start:slab_end, :, :,] = slab[:, :, :tensor_component.gridsize]
 
-            # Save the du_ij fluid variable
-            fluidvar = tensor_component.ddu.fluidvar
-            fluidvar_h5 = component_h5.create_group('du')
-            for multi_index in fluidvar.multi_indices:
-                fluidscalar = fluidvar[multi_index]
-                fluidscalar_h5 = fluidvar_h5.create_dataset(f'ddu_{multi_index}', shape, dtype=C2np['double'])
-
-                slab = slab_decompose(fluidscalar.grid_mv)
-                slab_start = slab.shape[0]*rank
-                slab_end = slab_start + slab.shape[0]
-                fluidscalar_h5[slab_start:slab_end, :, :,] = slab[:, :, :tensor_component.gridsize]
-
             # Done saving this component
             hdf5_file.flush()
             Barrier()
