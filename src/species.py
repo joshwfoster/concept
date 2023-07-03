@@ -132,8 +132,6 @@ def source_decay(donor_component, receiver_component, a1, a2):
 
     receiver_component.communicate_fluid_grids('=')
 
-
-
 # Class which serves as the data structure for fluid variables,
 # efficiently and elegantly implementing symmetric
 # multi-dimensional arrays. The actual fluid (scalar) grids are then
@@ -1131,7 +1129,7 @@ class TensorField:
         w = component.w(a=universals.a)
         w_eff = component.w_eff(a = universals.a)
 
-        JJ_prefactor = a**(3*w_eff - 1.) / (1 + w)
+        JJ_prefactor = a**(3*w_eff + 2.) / (1 + w)
 
         # Pointer to fluid density grid
         rho_scalar = component.ϱ
