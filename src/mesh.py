@@ -1439,39 +1439,6 @@ def interpolate_particles(component, gridsize, grid, quantity, order, ᔑdt,
         dim = 'xyz'.index(quantity[1])
         contribution_mv = component.mom_mv[dim:]
         contribution_ptr = cython.address(contribution_mv[:])
-    elif quantity in {'Sxx', 'Sxy', 'Sxz', 'Syy', 'Syz', 'Szz', 'Syx', 'Szx', 'Szy'}:
-
-        constant_contribution = False
-        quadratic = True
-
-        # Get the pointers to the conjugate momenta. Note that the conjugate momenta 
-        # are defined by q/m = au = a²ẋ = a²dx/dt where 'x' is the comoving coordinate
-        # hence we will need to remove some factors of a
-
-        dim1 = 'xyz'.index(quantity[1])
-        dim2 = 'xyz'.index(quantity[2])
-
-        contribution_mv1 = component.mom_mv[dim1:]
-        contribution_mv2 = component.mom_mv[dim2:]
-
-        contribution_ptr1 = cython.address(contribution_mv1[:])
-        contribution_ptr2 = cython.address(contribution_mv2[:])
-
-        # Now we are calculating the mass as appropriately adjusted for the decay
-        if ᔑdt:
-            abort(f'interpolate_particles() called with ᔑdt for T_{ij}')
-
-        # Decaying components should have their momentum reduced due
-        # to loss of mass. As the mass at time a is given by
-        # self.mass*a**(-3*self.w_eff(a)),
-        
-        # Mass at time a
-        contribution = component.mass*a**(-3*w_eff)
-
-        # Inverse mass at time a
-        contribution = 1. / contribution
-        contribution *= a**(-3)
-
     else:
         abort(
             f'interpolate_particles() called with '
