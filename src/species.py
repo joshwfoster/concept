@@ -130,6 +130,10 @@ def source_decay(donor_component, receiver_component, a1, a2):
         for index in range(receiver_component.size):
             receiver_grid[index] += rescale_factor * donor_grid[index]
 
+    receiver_component.communicate_fluid_grids('=')
+
+
+
 # Class which serves as the data structure for fluid variables,
 # efficiently and elegantly implementing symmetric
 # multi-dimensional arrays. The actual fluid (scalar) grids are then
@@ -1127,8 +1131,7 @@ class TensorField:
         w = component.w(a=universals.a)
         w_eff = component.w_eff(a = universals.a)
 
-        # Prefactors that we will reuse. a**4 comes from lowering the index on J
-        JJ_prefactor = 1. / (1. + w) * a**(-2 + 3 * w_eff) * a**4
+        JJ_prefactor = a**(3*w_eff - 1.) / (1 + w)
 
         # Pointer to fluid density grid
         rho_scalar = component.ϱ
@@ -1151,6 +1154,9 @@ class TensorField:
                 field_ptr = field_scalar.grid
 
                 for index in range(self.size):
+                    if rho_ptr[index] ==0:
+                        continue
+
                     field_ptr[index] += JJ_prefactor * J1_ptr[index] * J2_ptr[index] / rho_ptr[index]
 
 @cython.cclass
@@ -1188,6 +1194,9 @@ class TensorComponent:
             masterprint('Backward Step for U_{ij}')
             self.backward_step(rhs_evals, Δt)
 
+        self.u.communicate_fluid_grids('=')
+
+
     @cython.header( 
         # Arguments
         rhs_evals='object',
@@ -1202,8 +1211,6 @@ class TensorComponent:
 
         self.u.add(rhs_evals[4].u.fluidvar, 2.)
         self.u.add(rhs_evals[3].u.fluidvar, -1.)
-
-        self.u.communicate_fluid_grids('=')
 
     @cython.header( 
         # Arguments
@@ -1220,8 +1227,6 @@ class TensorComponent:
         self.u.add(rhs_evals[3].u.fluidvar, 2.)
         self.u.add(rhs_evals[2].u.fluidvar, -1.)
 
-        self.u.communicate_fluid_grids('=')
-
     @cython.pheader( 
         state = 'TensorComponent',
         components = 'list',
@@ -1231,13 +1236,15 @@ class TensorComponent:
         Rpp = 'double',
     )
     def source(self, components, R, Rpp):
+
         self.ddu.add(self.u.fluidvar, Rpp/R)
         self.ddu.add_laplacian(self.u.fluidvar)
-        
+
         for component in components:
             self.ddu.add_source(component)
 
         self.ddu.communicate_fluid_grids('=')
+        
 
     # This method will grow/shrink the data attributes
     @cython.pheader(
