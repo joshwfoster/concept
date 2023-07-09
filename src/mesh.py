@@ -1355,11 +1355,7 @@ subslabs_cache = {}
     contribution='double',
     contribution_factor='double',
     contribution_mv='double[::1]',
-    contribution_mv1='double[::1]',
-    contribution_mv2='double[::1]',
     contribution_ptr='double*',
-    contribution_ptr1='double*',
-    contribution_ptr2='double*',
     contribution_weighted='double',
     dim='int',
     dim1='int',
@@ -1627,8 +1623,6 @@ def add_fluid_to_grid(component, grid, quantity, ᔑdt, factor=1, operation='+='
     order='int',
     # Locals
     J_dim='FluidScalar',
-    N_vacuum='Py_ssize_t',
-    N_vacuum_originally='Py_ssize_t',
     dim='int',
     gridsize='Py_ssize_t',
     i='Py_ssize_t',
@@ -1670,14 +1664,9 @@ def convert_particles_to_fluid(component, order):
         J_dim = component.J[dim]
         interpolate_particles(component, gridsize, J_dim.grid_mv, 'J' + 'xyz'[dim], order, ᔑdt)
 
-    for dim1 in range(3):
-        for dim2 in range(dim1, 3):
-            ς_dim = component.ς[dim1, dim2]
-            interpolate_particles(component, gridsize, ς_dim.grid_mv, 'S' + 'xyz'[dim1] + 'xyz'[dim2], order, ᔑdt)
-
     component.communicate_fluid_grids('=')
 
-    return N_vacuum_originally
+    return 0 
 
 # Function for getting the shape of a local grid, which is part of a
 # global, cubic grid with some gridsize.
@@ -2620,8 +2609,8 @@ def spectral_laplacian(grid):
     slab_ptr = cython.address(slab[:, :, :])
     gridsize = slab_size_i
 
-    # Get the fundamental wavenumber in units of 1/Gyr 
-    k_unit = ℝ[2*π / boxsize / units.Gyr * light_speed * units.Mpc]
+    # Get the fundamental wavenumber in units of 1/Mpc 
+    k_unit = ℝ[2*π / boxsize * units.Mpc]
  
     for index, ki, kj, kk, factor, θ in fourier_loop(gridsize,with_nyquist=True):
 
