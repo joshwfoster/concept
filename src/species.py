@@ -93,6 +93,8 @@ def source_decay(donor_component, receiver_component, a1, a2):
     w_eff_1 = receiver_component.w_eff(a = a1)
     w_eff_2 = receiver_component.w_eff(a = a2)
 
+    masterprint('Receiver Effective Omega: ', w_eff_1, w_eff_2)
+
     # This rescales away the dependence on the effective equation of state
     # so that the quantity a^3*ϱ is conserved. 
     rescale_factor = a2**(3 * (w_eff_2-w) ) / a1**(3 * (w_eff_1-w))
@@ -112,6 +114,7 @@ def source_decay(donor_component, receiver_component, a1, a2):
 
     w_eff_1 = donor_component.w_eff(a = a1)
     w_eff_2 = donor_component.w_eff(a = a2)
+    masterprint('Donor Effective Omega: ', w_eff_1, w_eff_2)
 
     # This is the mass loss fraction due to decay
     rescale_factor = a1**(3*w_eff_1) / a2**(3*w_eff_2)

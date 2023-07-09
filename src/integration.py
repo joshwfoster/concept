@@ -906,12 +906,31 @@ def init_time(reinitialize=False):
             # commons module.
             # Note that only the master have access to the results
             # from the CLASS computation.
-            cosmo = call_class(class_call_reason='in order to set the cosmic clock')
-            background = cosmo.get_background()
-            a_values = 1/(background['z'] + 1)
-            t_values = background['proper time [Gyr]']*units.Gyr
-            H_values = background['H [1/Mpc]']*(light_speed/units.Mpc)
-            tau_values = background['conf. time [Mpc]'] / units.Mpc/light_speed * units.Gyr
+
+            # First we call class to see what this looks like
+            #cosmo = call_class(class_call_reason='in order to set the cosmic clock')
+            #background = cosmo.get_background()
+
+            #a_values = 1/(background['z'] + 1)
+            #t_values = background['proper time [Gyr]']*units.Gyr
+            #H_values = background['H [1/Mpc]']*(light_speed/units.Mpc)
+            #tau_values = background['conf. time [Mpc]'] / units.Mpc/light_speed * units.Gyr
+
+            masterprint('Replacing class with my result')
+
+            # This is my call
+            import h5py
+            cosmo_path = '/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/.reusable/class/9351e00f86.hdf5'
+            cosmo_archive = h5py.File(cosmo_path, 'r')
+            background = cosmo_archive['background']
+
+            a_values = asarray(background['a'])
+            t_values = asarray(background['proper time [Gyr]'])*units.Gyr
+            H_values = asarray(background['H [1__per__Mpc]'])*(light_speed/units.Mpc)
+            tau_values = asarray(background['conf. time [Mpc]']) / units.Mpc/light_speed * units.Gyr
+
+            masterprint('Time initialized from cosmo background')
+            masterprint(a_values[-1],t_values[-1], H_values[-1],tau_values[-1])
 
         elif master:
             masterprint('Solving matter + Λ background ...')

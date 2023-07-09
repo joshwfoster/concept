@@ -1,4 +1,3 @@
-
 # This file is part of CO𝘕CEPT, the cosmological 𝘕-body code in Python.
 # Copyright © 2015–2021 Jeppe Mosgaard Dakin.
 #
@@ -18,8 +17,6 @@
 # The author of CO𝘕CEPT can be contacted at dakin(at)phys.au.dk
 # The latest version of CO𝘕CEPT is available at
 # https://github.com/jmd-dk/concept/
-
-
 
 # Import everything from the commons module.
 # In the .pyx file, Cython declared variables will also get cimported.
@@ -110,11 +107,11 @@ def timeloop():
     init_time()
 
     # Initialize Tensor Perturbations
-    rhs_evals = [TensorComponent(gridsize=128),
-                 TensorComponent(gridsize=128),
-                 TensorComponent(gridsize=128),
-                 TensorComponent(gridsize=128),
-                 TensorComponent(gridsize=128),]
+    rhs_evals = [TensorComponent(gridsize=256),
+                 TensorComponent(gridsize=256),
+                 TensorComponent(gridsize=256),
+                 TensorComponent(gridsize=256),
+                 TensorComponent(gridsize=256),]
 
     # Check if an autosaved snapshot exists for the current
     # parameter file. If not, the initial_time_step will be 0.
@@ -242,11 +239,11 @@ def timeloop():
     ###   Set up the Information for the Fixed Conformal Step Size   ###
     ####################################################################
 
-    dConfTime = 1e-3 # Hacky insertion
+    dConfTime = 0.0006523127554334868 # Hacky insertion
     ConfTime = a_to_tau(universals.a)
 
     # Hacky insertion for the number of steps
-    for step_index in range(3475):
+    for step_index in range(5201):
 
         ##########################################################################
         ###   Here we define the time-step taking during this loop iteration   ###
@@ -266,27 +263,35 @@ def timeloop():
         if universals.t + Δt*(1 + Δt_reltol) + 2*machine_ϵ > sync_time:
             Δt_print = sync_time - universals.t
 
-        print_timestep_heading(time_step, Δt_print, bottleneck, components)
+
+        print_timestep_heading(time_step, Δt_print, '', components)
         masterprint('Conformal Time:', ConfTime)
-     
+        masterprint('Hubble:', hubble(universals.a))
+
+        Δt_max, bottleneck = get_base_timestep_size(components, static_timestepping_func)
+        masterprint('Concept stepping (not used):', Δt_max, bottleneck)
+    
+ 
         ##################################################################################
         ###   Here we perform the predictor step for the u_{ij} evolution and update   ###
         ###   the fluid decays by a half timestep using the exitng particle meshes     ###
         ##################################################################################
 
         # First append the empty states that will hold the predictor and corrector steps 
-        rhs_evals = rhs_evals + [TensorComponent(gridsize=128), TensorComponent(gridsize=128)]
+        rhs_evals = rhs_evals + [TensorComponent(gridsize=256), TensorComponent(gridsize=256)]
 
         # Now evaluate the predictor for the u_{n+1}. Then we clean the RHS Evals list
         masterprint('Computing the Predictor Step')
         rhs_evals[5].update(rhs_evals[:5], True, dConfTime)
 
         # Source the decay radiation
-        masterprint('Sourcing Decay Radiation')
-        if components[0].name == 'DecayingMatter':
-            source_decay(components[0], components[1], scale_factor(universals.t), scale_factor(universals.t + Δt/2.))
-        else:
-            source_decay(components[1], components[0], scale_factor(universals.t), scale_factor(universals.t + Δt/2.))
+        if len(components) == 2:
+            masterprint('Sourcing Decay Radiation')
+
+            if components[1].name == 'DecayRadiation':
+                source_decay(components[0], components[1], scale_factor(universals.t), scale_factor(universals.t + Δt/2.))
+            elif components[0].name == 'DecayRadiation':
+                source_decay(components[1], components[0], scale_factor(universals.t), scale_factor(universals.t + Δt/2.))
 
         # We are now done with the meshed particle data so we nullify fluid meshes
         # and return to a particle representation
@@ -409,11 +414,13 @@ def timeloop():
                 convert_particles_to_fluid(component, 4)
 
         # Source the decay radiation
-        masterprint('Sourcing Decay Radiation')
-        if components[0].name == 'DecayingMatter':
-            source_decay(components[0], components[1], scale_factor(universals.t-Δt/2.), scale_factor(universals.t))
-        else:
-            source_decay(components[1], components[0], scale_factor(universals.t-Δt/2.), scale_factor(universals.t))
+        if len(components) == 2:
+            masterprint('Sourcing Decay Radiation')
+
+            if components[1].name == 'DecayRadiation':
+                source_decay(components[0], components[1], scale_factor(universals.t-Δt/2.), scale_factor(universals.t))
+            elif components[0].name == 'DecayRadiation':
+                source_decay(components[1], components[0], scale_factor(universals.t-Δt/2.), scale_factor(universals.t))
    
         # Calculate the RHS for the predictor at n+1. Also throw away the n-4 state since it is not needed
         rhs_evals[5].source(components, universals.a, a_to_app(universals.a))
@@ -437,7 +444,7 @@ def timeloop():
         time_step_last_sync = time_step
 
         # Perform the dump if desired
-        if time_step % 100 == 0 or time_step % 100 == 1:
+        if time_step % 25 == 0:
             dump_time = DumpTime('a', t=None, a = universals.a)
             dump(components, rhs_evals[4], output_filenames, dump_time, Δt)
 
@@ -449,7 +456,7 @@ def timeloop():
         ###   End of the Loop   ###
         ###########################
 
-    print_timestep_heading(time_step, Δt, bottleneck, components, end=True)
+    print_timestep_heading(time_step, Δt, '', components, end=True)
 
 # Set of (cosmic) times at which the maximum time step size Δt_max
 # should be further scaled by Δt_initial_fac, which are at the initial

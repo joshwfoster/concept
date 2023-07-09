@@ -296,6 +296,8 @@ class CosmoResults:
             return value
     # Initialise instance
     def __init__(self, params, k_magnitudes, cosmo=None, filename='', class_call_reason=''):
+        filename='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/.reusable/class/9351e00f86.hdf5'
+
         """If no cosmo object is passed, all results should be loaded
         from disk, if possible. The first time this fails, CLASS will be
         called and a cosmo object will be produced.
@@ -2646,6 +2648,7 @@ def compute_cosmo(gridsize=-1, gauge='synchronous', filename='', class_call_reas
     cosmoresults = cosmoresults_cache.get((gridsize, gauge))
     if cosmoresults is not None:
         return cosmoresults
+
     # Determine whether to run CLASS "quickly" or "fully",
     # where only the latter computes the perturbations.
     if gridsize == -1:
@@ -2773,6 +2776,8 @@ def compute_transfer(
         # Transform the δ transfer function from synchronous
         # to N-body gauge, if requested.
         if gauge == 'nbody':
+            masterprint('Changing delta perturbations to n-body gauge')
+
             # The gauge transformation looks like
             # δᴺᵇ = δˢ + c⁻²(3aH(1 + w) - a*source/ρ_bar)θˢₜₒₜ/k²,
             # where source is any source term in the homogeneous proper
@@ -2785,6 +2790,8 @@ def compute_transfer(
                 if species_info is None:
                     continue
                 source += species_info.source_continuity(cosmoresults, a)
+                masterprint('Added source terms in changing gauge')
+
             # Do the gauge transformation
             ρ_bar = cosmoresults.ρ_bar(a, component)
             transfer_θ_tot = cosmoresults.θ(a)
@@ -2793,6 +2800,8 @@ def compute_transfer(
             for k in range(k_gridsize):
                 transfer[k] += (ℝ[light_speed**(-2)*(3*a*H*(1 + w) - a*source/ρ_bar)]
                     *transfer_θ_tot[k]/k_magnitudes[k]**2)
+            masterprint('Gauge has been changed to n-body')
+
     elif var_index == 1:
         # Get the θ transfer function
         transfer = cosmoresults.θ(a, a_next, component=component, weight=weight)
@@ -2828,6 +2837,7 @@ def compute_transfer(
             # θ_weight = (ρ_dcdm_bar + c⁻²P_dcdm_bar)/(
             #   ∑_α (ρ_α_bar + c⁻²P_α_bar)).
             if 'dcdm' in component.class_species.split('+'):
+                masterprint('DCDM Pressure: ', a, cosmoresults.P_bar(a, 'dcdm'))
                 θ_weight = (               cosmoresults.ρ_bar(a, 'dcdm')
                     + ℝ[light_speed**(-2)]*cosmoresults.P_bar(a, 'dcdm')
                     )/(                    cosmoresults.ρ_bar(a, component)
