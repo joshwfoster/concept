@@ -2610,7 +2610,7 @@ def spectral_laplacian(grid):
     gridsize = slab_size_i
 
     # Get the fundamental wavenumber in units of 1/Mpc 
-    k_unit = ℝ[2*π / boxsize * units.Mpc]
+    k_unit = ℝ[2*π / (boxsize * units.Mpc)]
  
     for index, ki, kj, kk, factor, θ in fourier_loop(gridsize,with_nyquist=True):
 
