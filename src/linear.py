@@ -296,7 +296,6 @@ class CosmoResults:
             return value
     # Initialise instance
     def __init__(self, params, k_magnitudes, cosmo=None, filename='', class_call_reason=''):
-        filename='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/.reusable/class/9351e00f86.hdf5'
 
         """If no cosmo object is passed, all results should be loaded
         from disk, if possible. The first time this fails, CLASS will be
@@ -313,6 +312,9 @@ class CosmoResults:
         # data is written as regular expressions.
         # This dict need to be an instance variable, as it may be
         # mutated by the methods.
+
+        filename='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/.reusable/class/e548b24704.hdf5'
+
         gauge = (params if params else {}).get('gauge', 'synchronous').lower()
         self.needed_keys = {
             # Background data as function of time

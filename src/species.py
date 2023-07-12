@@ -85,24 +85,17 @@ def source_decay(donor_component, receiver_component, a1, a2):
     receiver_grid = receiver_scalar.grid
     receiver_rho_total = receiver_component._ϱ_bar
 
-    masterprint('Donor Rho Total: ', donor_rho_total)
-    masterprint('Receiver Rho Total: ', receiver_rho_total)
-
     # Here we calculate how much to homogeneously rescale out of the receiver density
     w = receiver_component.w(a=a1)
     w_eff_1 = receiver_component.w_eff(a = a1)
     w_eff_2 = receiver_component.w_eff(a = a2)
 
-    masterprint('Receiver Effective Omega: ', w_eff_1, w_eff_2)
-
     # This rescales away the dependence on the effective equation of state
     # so that the quantity a^3*ϱ is conserved. 
     rescale_factor = a2**(3 * (w_eff_2-w) ) / a1**(3 * (w_eff_1-w))
-    masterprint('Density Rescale Factor: ', rescale_factor)
   
     # This is how much total we took away from the receiver grid
     add_factor = (1-rescale_factor) * receiver_rho_total / donor_rho_total
-    masterprint('Density Addition Factor: ', add_factor)
     
     for index in range(receiver_component.size):
         receiver_grid[index] *= rescale_factor
@@ -114,14 +107,12 @@ def source_decay(donor_component, receiver_component, a1, a2):
 
     w_eff_1 = donor_component.w_eff(a = a1)
     w_eff_2 = donor_component.w_eff(a = a2)
-    masterprint('Donor Effective Omega: ', w_eff_1, w_eff_2)
 
     # This is the mass loss fraction due to decay
     rescale_factor = a1**(3*w_eff_1) / a2**(3*w_eff_2)
 
     # This is now the fraction of momentum transferred to the fluid
     rescale_factor = 1. - rescale_factor
-    masterprint('Momentum Factor: ', rescale_factor)
 
     for dim in range(3):
         donor_scalar = donor_component.J[dim]
@@ -1094,10 +1085,8 @@ class TensorField:
         multi_index=object,
         field_scalar = 'FluidScalar',
         source_scalar = 'FluidScalar',
-        Δx = 'double',
     )
     def add_laplacian(self, rhs):
-        Δx = boxsize/self.gridsize/ units.Mpc/light_speed * units.Gyr
 
         for multi_index in self.fluidvar.multi_indices:
             field_scalar = self.fluidvar[multi_index]
@@ -1242,6 +1231,7 @@ class TensorComponent:
         self.ddu.add_laplacian(self.u.fluidvar)
 
         for component in components:
+            masterprint('Adding T Source from: ', component.name)
             self.ddu.add_source(component)
 
         self.ddu.communicate_fluid_grids('=')

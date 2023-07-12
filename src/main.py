@@ -107,11 +107,11 @@ def timeloop():
     init_time()
 
     # Initialize Tensor Perturbations
-    rhs_evals = [TensorComponent(gridsize=256),
-                 TensorComponent(gridsize=256),
-                 TensorComponent(gridsize=256),
-                 TensorComponent(gridsize=256),
-                 TensorComponent(gridsize=256),]
+    rhs_evals = [TensorComponent(gridsize=512),
+                 TensorComponent(gridsize=512),
+                 TensorComponent(gridsize=512),
+                 TensorComponent(gridsize=512),
+                 TensorComponent(gridsize=512),]
 
     # Check if an autosaved snapshot exists for the current
     # parameter file. If not, the initial_time_step will be 0.
@@ -239,11 +239,12 @@ def timeloop():
     ###   Set up the Information for the Fixed Conformal Step Size   ###
     ####################################################################
 
-    dConfTime = 0.2 * units.Mpc# [Mpc]
+    dConfTime = 0.1 * units.Mpc# [Mpc]
+    masterprint('Conformal Time Step:', dConfTime)
     ConfTime = a_to_tau(universals.a)
 
     # Hacky insertion for the number of steps
-    for step_index in range(5201):
+    for step_index in range(8601):
 
         ##########################################################################
         ###   Here we define the time-step taking during this loop iteration   ###
@@ -263,14 +264,12 @@ def timeloop():
         if universals.t + Δt*(1 + Δt_reltol) + 2*machine_ϵ > sync_time:
             Δt_print = sync_time - universals.t
 
-
         print_timestep_heading(time_step, Δt_print, '', components)
         masterprint('Conformal Time:', ConfTime)
         masterprint('Hubble:', hubble(universals.a))
 
         Δt_max, bottleneck = get_base_timestep_size(components, static_timestepping_func)
         masterprint('Concept stepping (not used):', Δt_max, bottleneck)
-    
  
         ##################################################################################
         ###   Here we perform the predictor step for the u_{ij} evolution and update   ###
@@ -278,7 +277,7 @@ def timeloop():
         ##################################################################################
 
         # First append the empty states that will hold the predictor and corrector steps 
-        rhs_evals = rhs_evals + [TensorComponent(gridsize=256), TensorComponent(gridsize=256)]
+        rhs_evals = rhs_evals + [TensorComponent(gridsize=512), TensorComponent(gridsize=512)]
 
         # Now evaluate the predictor for the u_{n+1}. Then we clean the RHS Evals list
         masterprint('Computing the Predictor Step')
@@ -444,7 +443,9 @@ def timeloop():
         time_step_last_sync = time_step
 
         # Perform the dump if desired
-        if time_step % 25 == 0:
+        if time_step % 200 == 0:
+
+            # Now do the dump
             dump_time = DumpTime('a', t=None, a = universals.a)
             dump(components, rhs_evals[4], output_filenames, dump_time, Δt)
 

@@ -920,14 +920,14 @@ def init_time(reinitialize=False):
 
             # This is my call
             import h5py
-            cosmo_path = '/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/.reusable/class/9351e00f86.hdf5'
+            cosmo_path = '/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/.reusable/class/e548b24704.hdf5'
             cosmo_archive = h5py.File(cosmo_path, 'r')
             background = cosmo_archive['background']
 
             a_values = asarray(background['a'])
             t_values = asarray(background['proper time [Gyr]'])*units.Gyr
             H_values = asarray(background['H [1__per__Mpc]'])*(light_speed/units.Mpc)
-            tau_values = asarray(background['conf. time [Mpc]']) / units.Mpc/ #light_speed * units.Gyr
+            tau_values = asarray(background['conf. time [Mpc]']) * units.Mpc # / light_speed * units.Gyr
 
             masterprint('Time initialized from cosmo background')
             masterprint(a_values[-1],t_values[-1], H_values[-1],tau_values[-1])
