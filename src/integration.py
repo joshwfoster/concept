@@ -920,8 +920,7 @@ def init_time(reinitialize=False):
 
             # This is my call
             import h5py
-            cosmo_path = '/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/.reusable/class/e548b24704.hdf5'
-            cosmo_archive = h5py.File(cosmo_path, 'r')
+            cosmo_archive = h5py.File(CosmoFile, 'r')
             background = cosmo_archive['background']
 
             a_values = asarray(background['a'])

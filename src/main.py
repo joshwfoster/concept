@@ -88,7 +88,6 @@ import interactions
     Δt_max='double',
     Δt_print='double',
     ConfTime='double',
-    dConfTime='double',
     returns='void',
 )
 def timeloop():
@@ -105,13 +104,6 @@ def timeloop():
     # Determine and set the correct initial values for the cosmic time
     # universals.t and the scale factor universals.a = a(universals.t).
     init_time()
-
-    # Initialize Tensor Perturbations
-    rhs_evals = [TensorComponent(gridsize=512),
-                 TensorComponent(gridsize=512),
-                 TensorComponent(gridsize=512),
-                 TensorComponent(gridsize=512),
-                 TensorComponent(gridsize=512),]
 
     # Check if an autosaved snapshot exists for the current
     # parameter file. If not, the initial_time_step will be 0.
@@ -166,6 +158,13 @@ def timeloop():
         component.realize_if_linear(2, specific_multi_index='trace')  # 𝒫
         component.realize_if_linear(2, specific_multi_index=(0, 0))   # ς
     masterprint('done')
+
+    # Initialize Tensor Perturbations
+    rhs_evals = [TensorComponent(gridsize=gw_mesh_size),
+                 TensorComponent(gridsize=gw_mesh_size),
+                 TensorComponent(gridsize=gw_mesh_size),
+                 TensorComponent(gridsize=gw_mesh_size),
+                 TensorComponent(gridsize=gw_mesh_size),]
 
     # Make fluid grids for the initial output. This is just for debugging
     for component in components:
@@ -239,12 +238,11 @@ def timeloop():
     ###   Set up the Information for the Fixed Conformal Step Size   ###
     ####################################################################
 
-    dConfTime = 0.1 * units.Mpc# [Mpc]
     masterprint('Conformal Time Step:', dConfTime)
     ConfTime = a_to_tau(universals.a)
 
     # Hacky insertion for the number of steps
-    for step_index in range(8601):
+    for step_index in range(NumSteps):
 
         ##########################################################################
         ###   Here we define the time-step taking during this loop iteration   ###
@@ -258,7 +256,7 @@ def timeloop():
         # Update the time-stepping bookkeeping
         time_step_previous = time_step
         universals.time_step = time_step
- 
+
         # Print out message at the beginning of each time step
         Δt_print = Δt
         if universals.t + Δt*(1 + Δt_reltol) + 2*machine_ϵ > sync_time:
@@ -270,14 +268,14 @@ def timeloop():
 
         Δt_max, bottleneck = get_base_timestep_size(components, static_timestepping_func)
         masterprint('Concept stepping (not used):', Δt_max, bottleneck)
- 
+
         ##################################################################################
         ###   Here we perform the predictor step for the u_{ij} evolution and update   ###
         ###   the fluid decays by a half timestep using the exitng particle meshes     ###
         ##################################################################################
 
-        # First append the empty states that will hold the predictor and corrector steps 
-        rhs_evals = rhs_evals + [TensorComponent(gridsize=512), TensorComponent(gridsize=512)]
+        # First append the empty states that will hold the predictor and corrector steps
+        rhs_evals = rhs_evals + [TensorComponent(gridsize=gw_mesh_size), TensorComponent(gridsize=gw_mesh_size)]
 
         # Now evaluate the predictor for the u_{n+1}. Then we clean the RHS Evals list
         masterprint('Computing the Predictor Step')
@@ -294,7 +292,7 @@ def timeloop():
 
         # We are now done with the meshed particle data so we nullify fluid meshes
         # and return to a particle representation
-        for component in components: 
+        for component in components:
             if component.original_representation == 'particles':
                 if component.representation == 'fluid':
                     component.resize(1)
@@ -362,11 +360,11 @@ def timeloop():
                     interaction_name = collections.Counter(
                         subtiling_computation_times[component]
                     ).most_common(1)[0][0]
-      
+
                 tiling_name    = f'{interaction_name} (tiles)'
                 subtiling_name = f'{interaction_name} (subtiles)'
                 component.tile_sort(tiling_name, subtiling_name)
- 
+
                 # Reset subtile computation time
                 subtiling_computation_times[component].clear()
 
@@ -402,11 +400,11 @@ def timeloop():
         universals.a = scale_factor(universals.t)
 
         #################################################################
-        ###   Now we source the remaining half of the radiation and   ### 
-        ###   and perform the evaluate-correct step for the u_{ij}    ###  
+        ###   Now we source the remaining half of the radiation and   ###
+        ###   and perform the evaluate-correct step for the u_{ij}    ###
         #################################################################
 
-        # Make fluid grids for sourcing the RHS                              
+        # Make fluid grids for sourcing the RHS
         for component in components:
             if component.original_representation == 'particles':
                 component.gridsize = rhs_evals[0].gridsize
@@ -420,7 +418,7 @@ def timeloop():
                 source_decay(components[0], components[1], scale_factor(universals.t-Δt/2.), scale_factor(universals.t))
             elif components[0].name == 'DecayRadiation':
                 source_decay(components[1], components[0], scale_factor(universals.t-Δt/2.), scale_factor(universals.t))
-   
+
         # Calculate the RHS for the predictor at n+1. Also throw away the n-4 state since it is not needed
         rhs_evals[5].source(components, universals.a, a_to_app(universals.a))
         rhs_evals[0].resize(1)
@@ -443,7 +441,7 @@ def timeloop():
         time_step_last_sync = time_step
 
         # Perform the dump if desired
-        if time_step % 200 == 0:
+        if time_step % SaveInterval == 0:
 
             # Now do the dump
             dump_time = DumpTime('a', t=None, a = universals.a)

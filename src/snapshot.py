@@ -145,6 +145,8 @@ class ConceptSnapshot:
             component_h5.attrs['gridsize'] = tensor_component.gridsize
             shape = (tensor_component.gridsize, )*3
 
+            masterprint('Writing out the Metric Perturbations ...')
+
             # Save the u_ij fluid variable
             fluidvar = tensor_component.u.fluidvar
             fluidvar_h5 = component_h5.create_group('u')

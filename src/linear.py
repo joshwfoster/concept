@@ -312,8 +312,9 @@ class CosmoResults:
         # data is written as regular expressions.
         # This dict need to be an instance variable, as it may be
         # mutated by the methods.
+        filename=CosmoFile
 
-        filename='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/.reusable/class/e548b24704.hdf5'
+        #filename='/u/jwfoster/concept/.reusable/class/998b753a99.hdf5'
 
         gauge = (params if params else {}).get('gauge', 'synchronous').lower()
         self.needed_keys = {
