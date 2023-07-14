@@ -80,7 +80,7 @@ def source_decay(donor_component, receiver_component, a1, a2):
     donor_grid = donor_scalar.grid
     donor_rho_total = donor_component._ϱ_bar
 
-    # The receiver scalar and grid    
+    # The receiver scalar and grid
     receiver_scalar = receiver_component.ϱ
     receiver_grid = receiver_scalar.grid
     receiver_rho_total = receiver_component._ϱ_bar
@@ -91,12 +91,12 @@ def source_decay(donor_component, receiver_component, a1, a2):
     w_eff_2 = receiver_component.w_eff(a = a2)
 
     # This rescales away the dependence on the effective equation of state
-    # so that the quantity a^3*ϱ is conserved. 
+    # so that the quantity a^3*ϱ is conserved.
     rescale_factor = a2**(3 * (w_eff_2-w) ) / a1**(3 * (w_eff_1-w))
-  
+
     # This is how much total we took away from the receiver grid
     add_factor = (1-rescale_factor) * receiver_rho_total / donor_rho_total
-    
+
     for index in range(receiver_component.size):
         receiver_grid[index] *= rescale_factor
         receiver_grid[index] += add_factor * donor_grid[index]
@@ -1134,10 +1134,10 @@ class TensorField:
                 # Momentum density scalars
                 J1_scalar = component.J[dim1]
                 J2_scalar = component.J[dim2]
-            
+
                 # Momentum density pointers
                 J1_ptr = J1_scalar.grid
-                J2_ptr = J2_scalar.grid 
+                J2_ptr = J2_scalar.grid
 
                 # Pointer to the field we add to
                 field_scalar = self.fluidvar[dim1, dim2]
@@ -1231,11 +1231,9 @@ class TensorComponent:
         self.ddu.add_laplacian(self.u.fluidvar)
 
         for component in components:
-            masterprint('Adding T Source from: ', component.name)
             self.ddu.add_source(component)
 
         self.ddu.communicate_fluid_grids('=')
-        
 
     # This method will grow/shrink the data attributes
     @cython.pheader(

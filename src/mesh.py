@@ -1664,9 +1664,7 @@ def convert_particles_to_fluid(component, order):
         J_dim = component.J[dim]
         interpolate_particles(component, gridsize, J_dim.grid_mv, 'J' + 'xyz'[dim], order, ᔑdt)
 
-    component.communicate_fluid_grids('=')
-
-    return 0 
+    return 0
 
 # Function for getting the shape of a local grid, which is part of a
 # global, cubic grid with some gridsize.
