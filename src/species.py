@@ -46,7 +46,7 @@ cimport('from mesh import spectral_laplacian')
 cimport('from analysis import measure')
 
 
-# Method for sourcing the decay radiation from the 
+# Method for sourcing the decay radiation from the
 # decaying dark matter
 @cython.pheader(
     # Arguments
@@ -1155,7 +1155,7 @@ class TensorComponent:
         at a particular instance in time
     """
 
-    @cython.pheader( 
+    @cython.pheader(
         # Arguments
         gridsize='Py_ssize_t',
     )
@@ -1164,13 +1164,13 @@ class TensorComponent:
         public Py_ssize_t gridsize
         public TensorField u
         public TensorField ddu
-        """        
+        """
 
         self.gridsize = gridsize
         self.u = TensorField(gridsize=gridsize)
         self.ddu = TensorField(gridsize=gridsize)
 
-    @cython.pheader( 
+    @cython.pheader(
         # Arguments
         rhs_evals='object',
         forward_step='bint',
@@ -1187,7 +1187,7 @@ class TensorComponent:
         self.u.communicate_fluid_grids('=')
 
 
-    @cython.header( 
+    @cython.header(
         # Arguments
         rhs_evals='object',
         Δt='double'
@@ -1202,7 +1202,7 @@ class TensorComponent:
         self.u.add(rhs_evals[4].u.fluidvar, 2.)
         self.u.add(rhs_evals[3].u.fluidvar, -1.)
 
-    @cython.header( 
+    @cython.header(
         # Arguments
         rhs_evals='object',
         Δt='double'

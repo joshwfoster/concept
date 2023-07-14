@@ -141,7 +141,7 @@ class ConceptSnapshot:
             tensor_component = self.tensor_perturbations[0]
             component_h5 = hdf5_file.create_group(f'components/MetricPerturbations')
 
-            # Save the gridsize attribute     
+            # Save the gridsize attribute
             component_h5.attrs['gridsize'] = tensor_component.gridsize
             shape = (tensor_component.gridsize, )*3
 
@@ -153,6 +153,18 @@ class ConceptSnapshot:
             for multi_index in fluidvar.multi_indices:
                 fluidscalar = fluidvar[multi_index]
                 fluidscalar_h5 = fluidvar_h5.create_dataset(f'u_{multi_index}', shape, dtype=C2np['double'])
+
+                slab = slab_decompose(fluidscalar.grid_mv)
+                slab_start = slab.shape[0]*rank
+                slab_end = slab_start + slab.shape[0]
+                fluidscalar_h5[slab_start:slab_end, :, :,] = slab[:, :, :tensor_component.gridsize]
+
+            # Save the ddu_ij fluid variable
+            fluidvar = tensor_component.ddu.fluidvar
+            fluidvar_h5 = component_h5.create_group('ddu')
+            for multi_index in fluidvar.multi_indices:
+                fluidscalar = fluidvar[multi_index]
+                fluidscalar_h5 = fluidvar_h5.create_dataset(f'ddu_{multi_index}', shape, dtype=C2np['double'])
 
                 slab = slab_decompose(fluidscalar.grid_mv)
                 slab_start = slab.shape[0]*rank
@@ -177,7 +189,7 @@ class ConceptSnapshot:
                         f'with representation "{component.representation}"'
                     )
 
-                if component.representation == 'particles':
+                if component.original_representation == 'particles':
 
                     N, N_local = component.N, component.N_local
                     N_lin = cbrt(N)

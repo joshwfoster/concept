@@ -441,9 +441,8 @@ def timeloop():
         time_step_last_sync = time_step
 
         # Perform the dump if desired
-        if time_step % SaveInterval == 0:
+        if time_step % SaveInterval == 0 or time_step % CheckPointInterval < 5 and time_step >= CheckPointInterval:
 
-            # Now do the dump
             dump_time = DumpTime('a', t=None, a = universals.a)
             dump(components, rhs_evals[4], output_filenames, dump_time, Δt)
 

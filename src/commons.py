@@ -2396,6 +2396,12 @@ cython.declare(
     dConfTime='double',
     gw_mesh_size='Py_ssize_t',
     CosmoFile=str,
+    gwFile_0=str,
+    gwFile_1=str,
+    gwFile_2=str,
+    gwFile_3=str,
+    gwFile_4=str,
+    CheckPointInterval='int',
 )
 # Input/output
 initial_conditions = user_params.get('initial_conditions', '')
@@ -2651,6 +2657,13 @@ SaveInterval = int(user_params.get('SaveInterval', 100))
 dConfTime = float(user_params.get('dConfTime', .1*units.Mpc))
 gw_mesh_size = to_int(user_params.get('gw_mesh_size', 256))
 CosmoFile = str(user_params.get('CosmoFile', ''))
+
+gwFile_0 = str(user_params.get('gwFile_0', ''))
+gwFile_1 = str(user_params.get('gwFile_1', ''))
+gwFile_2 = str(user_params.get('gwFile_2', ''))
+gwFile_3 = str(user_params.get('gwFile_3', ''))
+gwFile_4 = str(user_params.get('gwFile_4', ''))
+CheckPointInterval = int(user_params.get('CheckPointInterval', 5*SaveInterval))
 
 masterprint('Set NumSteps to :', NumSteps)
 masterprint('Set SaveInterval to :', SaveInterval)
