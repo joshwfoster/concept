@@ -1002,7 +1002,7 @@ class TensorField:
                 f'Attempted to resize fluid grids of {self.name} '
                 f'to a shape of {shape_noghosts}'
             )
-        
+
         # Recalculate and reassign meta data
         self.shape          = tuple([s + 2*nghosts for s in shape_noghosts])
         self.shape_noghosts = shape_noghosts
@@ -1050,7 +1050,7 @@ class TensorField:
     )
     def communicate_fluid_grids(self, operation):
         for multi_index in self.fluidvar.multi_indices:
-            
+
             fluidscalar= self.fluidvar[multi_index]
             communicate_ghosts(fluidscalar.grid_mv, operation)
 
@@ -1129,7 +1129,7 @@ class TensorField:
 
         # Now add the fluid momentum density contribution
         for dim1 in range(3):
-            for dim2 in range(3):
+            for dim2 in range(dim1):
 
                 # Momentum density scalars
                 J1_scalar = component.J[dim1]
@@ -1158,8 +1158,9 @@ class TensorComponent:
     @cython.pheader(
         # Arguments
         gridsize='Py_ssize_t',
+        filename=str,
     )
-    def __init__(self, *, gridsize=64):
+    def __init__(self, *, gridsize=64, filename=''):
         """
         public Py_ssize_t gridsize
         public TensorField u
@@ -1169,6 +1170,22 @@ class TensorComponent:
         self.gridsize = gridsize
         self.u = TensorField(gridsize=gridsize)
         self.ddu = TensorField(gridsize=gridsize)
+
+        if not filename == '':
+            self.load_data(filename)
+
+    @cython.pheader(
+        #Arguments
+        filename=str,
+    )
+    def load_data(self, filename):
+        masterprint('Loading tensor component data from:', filename)
+
+        with open_hdf5(filename, mode='r', driver='mpio', comm=comm) as hdf5_file:
+            uFields_h5 = hdf5_file['components']['u']
+            dduFields_h5 = hdf5_file['components']['ddu']
+
+
 
     @cython.pheader(
         # Arguments
