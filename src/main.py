@@ -426,15 +426,15 @@ def timeloop():
         # Calculate the RHS for the predictor at n+1.
         rhs_evals[5].source(components, universals.a, a_to_app(universals.a))
 
-        # Remove the n-4 state because it is not needed
+        # Now using the predictor, do the evaluate-correct step
+        rhs_evals[6].update(rhs_evals[:6], False, dConfTime)
+        rhs_evals[6].source(components, universals.a, a_to_app(universals.a))
+
+        # Now remove the first state in the RHS_Evals list because we are done with it
         rhs_evals[0].resize(1)
         rhs_evals = rhs_evals[1:]
 
-        # Now using the predictor, do the evaluate-correct step
-        rhs_evals[5].update(rhs_evals[:5], False, dConfTime)
-        rhs_evals[5].source(components, universals.a, a_to_app(universals.a))
-
-        # Now carefully remove the predictor state from the RHS Evals list
+        # We also remove the predictor because this has no meaning outside this step
         rhs_evals[4].resize(1)
         rhs_evals = rhs_evals[:4] + [rhs_evals[5]]
 
