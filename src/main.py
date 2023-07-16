@@ -172,7 +172,11 @@ def timeloop():
             component.gridsize = rhs_evals[0].gridsize
             convert_particles_to_fluid(component, 4)
 
-    rhs_evals[4].source(components, universals.a, a_to_app(universals.a))
+    # If we are starting a new simulation, we need to evaluate the RHS due to our 
+    # timestepping loop-structure. If we are restarting, we skip this.
+    if gwFile_4 == '':
+        masterprint('Sourcing the RHS outside the time-stepping loop for first-step')
+        rhs_evals[4].source(components, universals.a, a_to_app(universals.a))
 
     # Possibly output at the beginning of simulation
     if dump_times[0].t == universals.t or dump_times[0].a == universals.a:
@@ -278,14 +282,13 @@ def timeloop():
         # First append the empty states that will hold the predictor and corrector steps
         rhs_evals = rhs_evals + [TensorComponent(gridsize=gw_mesh_size), TensorComponent(gridsize=gw_mesh_size)]
 
-        # Now evaluate the predictor for the u_{n+1}. Then we clean the RHS Evals list
+        # Now take the predictor step
         masterprint('Computing the Predictor Step')
         rhs_evals[5].update(rhs_evals[:5], True, dConfTime)
 
         # Source the decay radiation
         if len(components) == 2:
             masterprint('Sourcing Decay Radiation')
-
             if components[1].name == 'DecayRadiation':
                 source_decay(components[0], components[1], scale_factor(universals.t), scale_factor(universals.t + Δt/2.))
             elif components[0].name == 'DecayRadiation':
@@ -303,7 +306,7 @@ def timeloop():
         ###   Here we update the rung and tiling assignments   ###
         ##########################################################
 
-        # Re-assign a short-range rung to each particle based on their short-range 
+        # Re-assign a short-range rung to each particle based on their short-range
         # their short-range acceleration
         for component in components:
             component.assign_rungs(Δt, fac_softening)
@@ -420,8 +423,10 @@ def timeloop():
             elif components[0].name == 'DecayRadiation':
                 source_decay(components[1], components[0], scale_factor(universals.t-Δt/2.), scale_factor(universals.t))
 
-        # Calculate the RHS for the predictor at n+1. Also throw away the n-4 state since it is not needed
+        # Calculate the RHS for the predictor at n+1.
         rhs_evals[5].source(components, universals.a, a_to_app(universals.a))
+
+        # Remove the n-4 state because it is not needed
         rhs_evals[0].resize(1)
         rhs_evals = rhs_evals[1:]
 
