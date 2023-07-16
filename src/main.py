@@ -160,13 +160,13 @@ def timeloop():
     masterprint('done')
 
     # Initialize Tensor Perturbations
-    rhs_evals = [TensorComponent(gridsize=gw_mesh_size),
-                 TensorComponent(gridsize=gw_mesh_size),
-                 TensorComponent(gridsize=gw_mesh_size),
-                 TensorComponent(gridsize=gw_mesh_size),
-                 TensorComponent(gridsize=gw_mesh_size),]
+    rhs_evals = [TensorComponent(gridsize=gw_mesh_size, filename=gwFile_0),
+                 TensorComponent(gridsize=gw_mesh_size, filename=gwFile_1),
+                 TensorComponent(gridsize=gw_mesh_size, filename=gwFile_2),
+                 TensorComponent(gridsize=gw_mesh_size, filename=gwFile_3),
+                 TensorComponent(gridsize=gw_mesh_size, filename=gwFile_4),]
 
-    # Make fluid grids for the initial output. This is just for debugging
+    # Make fluid grids before beginning the loop
     for component in components:
         if component.original_representation == 'particles':
             component.gridsize = rhs_evals[0].gridsize
@@ -264,6 +264,7 @@ def timeloop():
 
         print_timestep_heading(time_step, Δt_print, '', components)
         masterprint('Conformal Time:', ConfTime)
+        masterprint('Scale Factor:', universals.a)
         masterprint('Hubble:', hubble(universals.a))
 
         Δt_max, bottleneck = get_base_timestep_size(components, static_timestepping_func)

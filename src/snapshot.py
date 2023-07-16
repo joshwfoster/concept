@@ -214,7 +214,7 @@ class ConceptSnapshot:
                     pos_h5[start_local:end_local, :] = component.pos_mv3[:N_local, :]
                     mom_h5[start_local:end_local, :] = component.mom_mv3[:N_local, :]
 
-                if component.representation == 'fluid':
+                if component.original_representation == 'fluid':
                     # Write out progress message
                     masterprint(
                         f'Writing out {component.name} ({component.species} with '
@@ -337,6 +337,9 @@ class ConceptSnapshot:
             self.params['Ωcdm']    = hdf5_file.attrs[unicode('Ωcdm')]
             # Load component data
             for name, component_h5 in hdf5_file['components'].items():
+                if name == 'MetricPerturbations':
+                    continue
+
                 # Determine representation from the snapshot
                 if 'N' in component_h5.attrs:
                     representation = 'particles'

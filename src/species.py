@@ -42,7 +42,7 @@ cimport(
     '    species_canonical, species_registered,    '
 )
 
-cimport('from mesh import spectral_laplacian')
+cimport('from mesh import spectral_laplacian, get_fftw_slab, domain_decompose')
 cimport('from analysis import measure')
 
 
@@ -1172,20 +1172,86 @@ class TensorComponent:
         self.ddu = TensorField(gridsize=gridsize)
 
         if not filename == '':
+            masterprint('Loading Tensor Perturbations from:', filename)
             self.load_data(filename)
 
     @cython.pheader(
         #Arguments
         filename=str,
+        arr=object,  # np.ndarray
+        slab='double[:, :, ::1]',
+        slab_start='Py_ssize_t',
+        index_i='Py_ssize_t',
+        index_i_file='Py_ssize_t',
+        chunk_size='Py_ssize_t',
+        domain_size_i='Py_ssize_t',
+        domain_size_j='Py_ssize_t',
+        domain_size_k='Py_ssize_t',
     )
     def load_data(self, filename):
-        masterprint('Loading tensor component data from:', filename)
-
         with open_hdf5(filename, mode='r', driver='mpio', comm=comm) as hdf5_file:
-            uFields_h5 = hdf5_file['components']['u']
-            dduFields_h5 = hdf5_file['components']['ddu']
+            uFields_h5 = hdf5_file['components']['MetricPerturbations']['u']
+            dduFields_h5 = hdf5_file['components']['MetricPerturbations']['ddu']
 
+            # Compute local indices of fluid grids
+            domain_size_i = self.gridsize//domain_subdivisions[0]
+            domain_size_j = self.gridsize//domain_subdivisions[1]
+            domain_size_k = self.gridsize//domain_subdivisions[2]
 
+            if master and (   self.gridsize != domain_subdivisions[0]*domain_size_i
+                           or self.gridsize != domain_subdivisions[1]*domain_size_j
+                           or self.gridsize != domain_subdivisions[2]*domain_size_k):
+                abort(
+                    f'The gridsize of the {name} component is {gridsize} '
+                    f'which cannot be equally shared among {nprocs} processes'
+                )
+
+            # Make sure fluid grids have the correct size
+            self.resize((domain_size_i, domain_size_j, domain_size_k))
+
+            # Now populate the `u` fluid grids
+            for multi_index in self.u.fluidvar.multi_indices:
+                fluidscalar_h5 = uFields_h5[f'u_{multi_index}']
+                slab = get_fftw_slab(self.gridsize)
+                slab_start = slab.shape[0]*rank
+
+                # Load in using chunks
+                chunk_size = np.min(( ℤ[slab.shape[0]], ℤ[2**30//8//self.gridsize**2], ))
+
+                arr = asarray(slab)
+                for index_i in range(0, ℤ[slab.shape[0]], chunk_size):
+                    if index_i + chunk_size > ℤ[slab.shape[0]]:
+                        chunk_size = ℤ[slab.shape[0]] - index_i
+                    index_i_file = slab_start + index_i
+                    fluidscalar_h5.read_direct(
+                        arr,
+                        source_sel=np.s_[index_i_file:(index_i_file + chunk_size), :, :],
+                        dest_sel=np.s_[index_i:(index_i + chunk_size), :, :self.gridsize],
+                    )
+                # Communicate the slabs directly to the domain decomposed fluid grids.
+                domain_decompose(slab, self.u.fluidvar[multi_index].grid_mv)
+
+            # Now populate the `ddu` fluid grids
+            for multi_index in self.ddu.fluidvar.multi_indices:
+                fluidscalar_h5 = dduFields_h5[f'ddu_{multi_index}']
+                slab = get_fftw_slab(self.gridsize)
+                slab_start = slab.shape[0]*rank
+
+                # Load in using chunks
+                chunk_size = np.min(( ℤ[slab.shape[0]], ℤ[2**30//8//self.gridsize**2], ))
+
+                arr = asarray(slab)
+                for index_i in range(0, ℤ[slab.shape[0]], chunk_size):
+                    if index_i + chunk_size > ℤ[slab.shape[0]]:
+                        chunk_size = ℤ[slab.shape[0]] - index_i
+                    index_i_file = slab_start + index_i
+                    fluidscalar_h5.read_direct(
+                        arr,
+                        source_sel=np.s_[index_i_file:(index_i_file + chunk_size), :, :],
+                        dest_sel=np.s_[index_i:(index_i + chunk_size), :, :self.gridsize],
+                    )
+                # Communicate the slabs directly to the domain decomposed fluid grids.
+                domain_decompose(slab, self.ddu.fluidvar[multi_index].grid_mv)
 
     @cython.pheader(
         # Arguments
@@ -1234,7 +1300,7 @@ class TensorComponent:
         self.u.add(rhs_evals[3].u.fluidvar, 2.)
         self.u.add(rhs_evals[2].u.fluidvar, -1.)
 
-    @cython.pheader( 
+    @cython.pheader(
         state = 'TensorComponent',
         components = 'list',
         index = 'Py_ssize_t',
@@ -1302,7 +1368,7 @@ class Component:
         class_species=None,
         realization_options=None,
         w=None,
-        boltzmann_closure=None,
+        boltzmann_closure='truncate',
         approximations=None,
         softening_length=None,
         life=None,
@@ -2006,6 +2072,9 @@ class Component:
                     f'Fluids with boltzmann_order > 2 are not implemented, '
                     f'but boltzmann_order = {self.boltzmann_order} was specified for {self.name}'
                 )
+
+        masterprint(self.name, self.boltzmann_order, self.boltzmann_closure)
+
         self.shape = (1, 1, 1)
         self.shape_noghosts = (1, 1, 1)
         self.size = np.prod(self.shape)
