@@ -1129,7 +1129,7 @@ class TensorField:
 
         # Now add the fluid momentum density contribution
         for dim1 in range(3):
-            for dim2 in range(dim1):
+            for dim2 in range(dim1+1):
 
                 # Momentum density scalars
                 J1_scalar = component.J[dim1]
