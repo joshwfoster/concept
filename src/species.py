@@ -1296,7 +1296,7 @@ class TensorComponent:
         self.u.add(rhs_evals[2].ddu.fluidvar, Δt*Δt*(7./120.))
         self.u.add(rhs_evals[3].ddu.fluidvar, Δt*Δt*(1./60.))
         self.u.add(rhs_evals[4].ddu.fluidvar, Δt*Δt*(209./240.))
-        self.u.add(rhs_evals[5].ddu.fluidvar, Δt*Δt*(3./240.))
+        self.u.add(rhs_evals[5].ddu.fluidvar, Δt*Δt*(3./40.))
 
         self.u.add(rhs_evals[4].u.fluidvar, 2.)
         self.u.add(rhs_evals[3].u.fluidvar, -1.)
