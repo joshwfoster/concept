@@ -1255,7 +1255,7 @@ class TensorComponent:
 
     @cython.pheader(
         # Arguments
-        rhs_evals='object',
+        rhs_evals=list,
         forward_step='bint',
         Δt='double'
     )
@@ -1272,7 +1272,7 @@ class TensorComponent:
 
     @cython.header(
         # Arguments
-        rhs_evals='object',
+        rhs_evals=list,
         Δt='double'
     )
     def forward_step(self, rhs_evals, Δt):
@@ -1287,7 +1287,7 @@ class TensorComponent:
 
     @cython.header(
         # Arguments
-        rhs_evals='object',
+        rhs_evals=list,
         Δt='double'
     )
     def backward_step(self, rhs_evals, Δt):
@@ -1310,6 +1310,7 @@ class TensorComponent:
         Rpp = 'double',
     )
     def source(self, components, R, Rpp):
+        masterprint('Effective Mass Squared:', Rpp/R)
 
         self.ddu.add(self.u.fluidvar, Rpp/R)
         self.ddu.add_laplacian(self.u.fluidvar)

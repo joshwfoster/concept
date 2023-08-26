@@ -170,7 +170,7 @@ def timeloop():
     for component in components:
         if component.original_representation == 'particles':
             component.gridsize = rhs_evals[0].gridsize
-            convert_particles_to_fluid(component, 4)
+            convert_particles_to_fluid(component, SmoothingKernelOrder)
 
     # If we are starting a new simulation, we need to evaluate the RHS due to our 
     # timestepping loop-structure. If we are restarting, we skip this.
@@ -412,7 +412,7 @@ def timeloop():
         for component in components:
             if component.original_representation == 'particles':
                 component.gridsize = rhs_evals[0].gridsize
-                convert_particles_to_fluid(component, 4)
+                convert_particles_to_fluid(component, SmoothingKernelOrder)
 
         # Source the decay radiation
         if len(components) == 2:

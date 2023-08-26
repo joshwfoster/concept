@@ -2402,6 +2402,7 @@ cython.declare(
     gwFile_3=str,
     gwFile_4=str,
     CheckPointInterval='int',
+    SmoothingKernelOrder='int',
 )
 # Input/output
 initial_conditions = user_params.get('initial_conditions', '')
@@ -2664,7 +2665,10 @@ gwFile_2 = str(user_params.get('gwFile_2', ''))
 gwFile_3 = str(user_params.get('gwFile_3', ''))
 gwFile_4 = str(user_params.get('gwFile_4', ''))
 CheckPointInterval = int(user_params.get('CheckPointInterval', 5*SaveInterval))
+SmoothingKernelOrder = int(user_params.get('SmoothingKernelOrder', 4))
 
+
+masterprint('Set Smoothing Kernel Order to: ', SmoothingKernelOrder)
 masterprint('Set NumSteps to :', NumSteps)
 masterprint('Set SaveInterval to :', SaveInterval)
 masterprint('Set dConfTime to :', dConfTime)
