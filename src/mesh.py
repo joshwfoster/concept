@@ -1355,7 +1355,11 @@ subslabs_cache = {}
     contribution='double',
     contribution_factor='double',
     contribution_mv='double[::1]',
+    contribution_mv1='double[::1]',
+    contribution_mv2='double[::1]',
     contribution_ptr='double*',
+    contribution_ptr1='double*',
+    contribution_ptr2='double*',
     contribution_weighted='double',
     dim='int',
     dim1='int',
@@ -1435,6 +1439,25 @@ def interpolate_particles(component, gridsize, grid, quantity, order, ᔑdt,
         dim = 'xyz'.index(quantity[1])
         contribution_mv = component.mom_mv[dim:]
         contribution_ptr = cython.address(contribution_mv[:])
+
+    elif quantity in {'Sxx', 'Sxy', 'Sxz', 'Syy', 'Syz', 'Szz', 'Syx', 'Szx', 'Szy'}:
+
+        constant_contribution = False
+        quadratic = True
+
+        dim1 = 'xyz'.index(quantity[1])
+        dim2 = 'xyz'.index(quantity[2])
+
+        contribution_mv1 = component.mom_mv[dim1:]
+        contribution_mv2 = component.mom_mv[dim2:]
+
+        contribution_ptr1 = cython.address(contribution_mv1[:])
+        contribution_ptr2 = cython.address(contribution_mv2[:])
+
+        # Now we are calculating the mass as appropriately adjusted for the decay
+        if ᔑdt:
+            abort(f'interpolate_particles() called with ᔑdt for T_{ij}')
+
     else:
         abort(
             f'interpolate_particles() called with '
@@ -1460,6 +1483,7 @@ def interpolate_particles(component, gridsize, grid, quantity, order, ᔑdt,
             if not constant_contribution:
                 if quadratic:
                     contribution = contribution_factor*contribution_ptr1[indexˣ]*contribution_ptr2[indexˣ]
+                    contribution /= component.mass
                 else:
                     contribution = contribution_factor*contribution_ptr[indexˣ]
         # Get, translate and scale the coordinates so that
@@ -1659,10 +1683,20 @@ def convert_particles_to_fluid(component, order):
     ᔑdt = {}
     gridsize = component.gridsize
     ϱ = component.ϱ.grid_mv
+
+    masterprint('Meshing the energy density')
     interpolate_particles(component, gridsize, ϱ, 'ϱ', order, ᔑdt)
+
+    masterprint('Meshing the momentum density')
     for dim in range(3):
         J_dim = component.J[dim]
         interpolate_particles(component, gridsize, J_dim.grid_mv, 'J' + 'xyz'[dim], order, ᔑdt)
+
+    masterprint('Meshing the stress tensor')
+    for dim1 in range(3):
+        for dim2 in range(dim1, 3):
+            ς_dim = component.ς[dim1, dim2]
+            interpolate_particles(component, gridsize, ς_dim.grid_mv, 'S' + 'xyz'[dim1] + 'xyz'[dim2], order, ᔑdt)
 
     return 0
 
@@ -2572,6 +2606,141 @@ def fourier_operate(slab, deconv_order=0, interlace_flag=0, diff_dim=-1):
     return slab
 
 
+
+
+# Function returning the spectral laplacian as applied to a grid
+@cython.pheader(
+    # Arguments
+    grid='double[:, :, ::1]',
+    diff_dim = 'int', 
+    grad_name = 'str',
+    # Locals
+    slab='double[:, :, ::1]',
+    slab_size_i='Py_ssize_t',
+    slab_size_j='Py_ssize_t',
+    slab_size_k='Py_ssize_t',
+    slab_ptr='double*',
+    gridsize='Py_ssize_t',
+    index='Py_ssize_t',
+    ki='Py_ssize_t',
+    kj='Py_ssize_t',
+    kk='Py_ssize_t',
+    k_unit='double',
+    factor='double',
+    θ='double',
+    re='double',
+    im='double',
+    shape=tuple,
+    new_grid = 'double[:, :, ::1]',
+    returns='double[:, :, ::1]',
+)
+def spectral_grad(grid, diff_dim, grad_name):
+    
+    # Slab decompose and fourier transform the input grid
+    slab = slab_decompose(grid, slab_or_buffer_name = 'grad slab buffer ' + grad_name, prepare_fft = True)
+    fft(slab, 'forward', apply_forward_normalization=True)    
+
+    # Extract slab shape and pointer
+    slab_size_j, slab_size_i, slab_size_k = asarray(slab).shape
+    slab_ptr = cython.address(slab[:, :, :])
+    gridsize = slab_size_i
+
+    # Get the fundamental wavenumber in units of 1/Mpc 
+    k_unit = ℝ[2*π / (boxsize * units.Mpc)]
+ 
+    for index, ki, kj, kk, factor, θ in fourier_loop(gridsize,with_nyquist=True):
+        factor = k_unit * (  (-𝔹[diff_dim == 0] & ki)
+                           | (-𝔹[diff_dim == 1] & kj)
+                           | (-𝔹[diff_dim == 2] & kk)
+                          )
+
+
+        re = slab_ptr[index    ]
+        im = slab_ptr[index + 1]
+
+        re, im = -im, re
+
+        # Store updated values back in slabs
+        slab_ptr[index    ] = re * factor
+        slab_ptr[index + 1] = im * factor
+    
+    # Inverse fourier transformation
+    fft(slab, 'backward')
+
+    # Create an Empty Buffer to Domain Decompose
+    shape = get_gridshape_local(gridsize)
+    new_grid = get_buffer(shape, 'grad grid buffer' + grad_name, nullify = True)
+    return domain_decompose(slab, new_grid, do_ghost_communication=True)
+
+
+
+# Function returning the spectral laplacian as applied to a grid
+@cython.pheader(
+    # Arguments
+    grid='double[:, :, ::1]',
+    diff_dim_i = 'int', 
+    diff_dim_j = 'int', 
+    # Locals
+    slab='double[:, :, ::1]',
+    slab_size_i='Py_ssize_t',
+    slab_size_j='Py_ssize_t',
+    slab_size_k='Py_ssize_t',
+    slab_ptr='double*',
+    gridsize='Py_ssize_t',
+    index='Py_ssize_t',
+    ki='Py_ssize_t',
+    kj='Py_ssize_t',
+    kk='Py_ssize_t',
+    k_unit='double',
+    factor='double',
+    θ='double',
+    re='double',
+    im='double',
+    shape=tuple,
+    new_grid = 'double[:, :, ::1]',
+    returns='double[:, :, ::1]',
+)
+def spectral_hesse(grid, diff_dim_i, diff_dim_j):
+    
+    # Slab decompose and fourier transform the input grid
+    slab = slab_decompose(grid, slab_or_buffer_name = 'hesse slab buffer', prepare_fft = True)
+    fft(slab, 'forward', apply_forward_normalization=True)    
+
+    # Extract slab shape and pointer
+    slab_size_j, slab_size_i, slab_size_k = asarray(slab).shape
+    slab_ptr = cython.address(slab[:, :, :])
+    gridsize = slab_size_i
+
+    # Get the fundamental wavenumber in units of 1/Mpc 
+    k_unit = ℝ[2*π / (boxsize * units.Mpc)]
+ 
+    for index, ki, kj, kk, factor, θ in fourier_loop(gridsize,with_nyquist=True):
+        factor = -k_unit * k_unit
+
+        factor *= (  (-𝔹[diff_dim_i == 0] & ki)
+                   | (-𝔹[diff_dim_i == 1] & kj)
+                   | (-𝔹[diff_dim_i == 2] & kk)
+                   )
+        factor *= ( (-𝔹[diff_dim_j == 0] & ki)
+                   | (-𝔹[diff_dim_j == 1] & kj)
+                   | (-𝔹[diff_dim_j == 2] & kk)
+                   )
+
+        # Extract real and imag part of slab
+        slab_ptr[index    ] *= factor
+        slab_ptr[index + 1] *= factor
+    
+    # Inverse fourier transformation
+    fft(slab, 'backward')
+
+    # Create an Empty Buffer to Domain Decompose
+    shape = get_gridshape_local(gridsize)
+    new_grid = get_buffer(shape, 'hesse grid buffer', nullify = True)
+    return domain_decompose(slab, new_grid, do_ghost_communication=True)
+
+
+
+
 # Function returning the spectral laplacian as applied to a grid
 @cython.pheader(
     # Arguments
@@ -2625,6 +2794,66 @@ def spectral_laplacian(grid):
     shape = get_gridshape_local(gridsize)
     new_grid = get_buffer(shape, 'laplacian grid buffer', nullify = True)
     return domain_decompose(slab, new_grid, do_ghost_communication=True)
+
+# Function which inverts the laplacian
+@cython.pheader(
+    # Arguments
+    grid='double[:, :, ::1]',
+    # Locals
+    slab='double[:, :, ::1]',
+    slab_size_i='Py_ssize_t',
+    slab_size_j='Py_ssize_t',
+    slab_size_k='Py_ssize_t',
+    slab_ptr='double*',
+    gridsize='Py_ssize_t',
+    index='Py_ssize_t',
+    ki='Py_ssize_t',
+    kj='Py_ssize_t',
+    kk='Py_ssize_t',
+    k_unit='double',
+    factor='double',
+    θ='double',
+    re='double',
+    im='double',
+    shape=tuple,
+    new_grid = 'double[:, :, ::1]',
+    returns='double[:, :, ::1]',
+)
+def inverse_laplacian(grid):
+    
+    # Slab decompose and fourier transform the input grid
+    slab = slab_decompose(grid, slab_or_buffer_name = 'inverse laplacian slab buffer', prepare_fft = True)
+    fft(slab, 'forward', apply_forward_normalization=True)    
+
+    # Extract slab shape and pointer
+    slab_size_j, slab_size_i, slab_size_k = asarray(slab).shape
+    slab_ptr = cython.address(slab[:, :, :])
+    gridsize = slab_size_i
+
+    # Get the fundamental wavenumber in units of 1/Mpc 
+    k_unit = ℝ[2*π / (boxsize * units.Mpc)]
+ 
+    for index, ki, kj, kk, factor, θ in fourier_loop(gridsize,with_nyquist=True):
+
+        factor *= -k_unit * k_unit * (ki * ki + kj * kj + kk * kk)
+        if ki == 0 and kj == 0 and kk == 0:
+            factor = 0
+        else:
+            factor = 1/factor
+
+        # Extract real and imag part of slab
+        slab_ptr[index    ] *= factor
+        slab_ptr[index + 1] *= factor
+    
+    # Inverse fourier transformation
+    fft(slab, 'backward')
+
+    # Create an Empty Buffer to Domain Decompose
+    shape = get_gridshape_local(gridsize)
+    new_grid = get_buffer(shape, 'inverse laplacian grid buffer', nullify = True)
+    return domain_decompose(slab, new_grid, do_ghost_communication=True)
+
+
 
 # Function for nullifying sets of modes of Fourier space slabs
 @cython.header(
