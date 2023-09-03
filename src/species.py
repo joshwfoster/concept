@@ -42,7 +42,7 @@ cimport(
     '    species_canonical, species_registered,    '
 )
 
-cimport('from mesh import spectral_laplacian, get_fftw_slab, domain_decompose')
+cimport('from mesh import spectral_laplacian, get_fftw_slab, domain_decompose, inverse_laplacian')
 cimport('from analysis import measure')
 
 
@@ -908,7 +908,200 @@ class Tiling:
     def __str__(self):
         return self.__repr__()
 
+# The class containing the metric perturbations
+@cython.cclass
+class ScalarField:
+    """An instance of this class represents the collection of u_{ij} metric
+       perturbations
+    """
 
+    # Initialisation method
+    @cython.pheader(
+        # Arguments
+        gridsize='Py_ssize_t',
+        boltzmann_order='Py_ssize_t',
+        boltzmann_closure=str,
+        # Locals
+        tile_index='signed char',
+        index='Py_ssize_t',
+        indexᵖ='Py_ssize_t',
+    )
+    def __init__(self, *, gridsize=-1, boltzmann_order=0, boltzmann_closure='truncate'):
+
+        """
+        public str name
+        public Py_ssize_t gridsize
+        public str representation
+        public str species
+        public Py_ssize_t boltzmann_order
+        public str boltzmann_closure
+        public tuple shape
+        public tuple shape_noghosts
+        public Py_ssize_t size
+        public Py_ssize_t size_noghosts
+        public object fluidvar
+        """
+
+        self.name = 'Scalar Field'
+        self.gridsize = gridsize
+        self.representation = 'Scalar'
+        self.species = 'Scalar Field'
+
+        # Warn if weird gridsize
+        if self.gridsize%2 != 0:
+            masterwarn(
+                f'{self.name.capitalize()} has an odd grid size ({self.gridsize}). '
+                f'Some operations may not function correctly.'
+            )
+
+        # Set Boltzmann order and closure for the tensor
+        self.boltzmann_order = boltzmann_order
+        self.boltzmann_closure = boltzmann_closure
+
+        self.shape = (1, 1, 1)
+        self.shape_noghosts = (1, 1, 1)
+        self.size = np.prod(self.shape)
+        self.size_noghosts = np.prod(self.shape_noghosts)
+
+        # Generate the field variables
+        self.fluidvar = Tensor(self, boltzmann_order, (3, )*boltzmann_order, symmetric=True)
+
+        for multi_index in self.fluidvar.multi_indices:
+            self.fluidvar[multi_index] = FluidScalar(0, multi_index, is_linear=True)
+
+        self.realize()
+
+    # This method will grow/shrink the data attributes.
+    # Note that it will update N_allocated but not N_local.
+    @cython.pheader(
+        # Arguments
+        size_or_shape_noghosts=object,  # Py_ssize_t or tuple
+        # Locals
+        fluidscalar='FluidScalar',
+        multi_index=object,
+        i='Py_ssize_t',
+        s='Py_ssize_t',
+        shape_noghosts=tuple,
+        size='Py_ssize_t',
+        size_old='Py_ssize_t',
+        s_old='Py_ssize_t',
+    )
+    def resize(self, size_or_shape_noghosts):
+        shape_noghosts = tuple(any2list(size_or_shape_noghosts))
+        if len(shape_noghosts) == 1:
+            shape_noghosts *= 3
+        if not any([
+            s + 2*nghosts != s_old
+            for s, s_old in zip(shape_noghosts, self.shape)
+        ]):
+            return
+        if any([s < 1 for s in shape_noghosts]):
+            abort(
+                f'Attempted to resize fluid grids of {self.name} '
+                f'to a shape of {shape_noghosts}'
+            )
+
+        # Recalculate and reassign meta data
+        self.shape          = tuple([s + 2*nghosts for s in shape_noghosts])
+        self.shape_noghosts = shape_noghosts
+        self.size           = np.prod(self.shape)
+        self.size_noghosts  = np.prod(self.shape_noghosts)
+
+        # Reallocate fluid data
+        for multi_index in self.fluidvar.multi_indices:
+            fluidscalar=self.fluidvar[multi_index]
+            fluidscalar.resize(shape_noghosts)
+
+    # Method for 3D realisation of linear transfer functions.
+    # As all arguments are optional,
+    # this has to be a pure Python method.
+    def realize(self):
+
+        gridsize = self.gridsize
+        shape = tuple([gridsize//domain_subdivisions[dim] for dim in range(3)])
+        self.resize(shape)
+
+        if gridsize%nprocs != 0:
+            abort(
+                f'Cannot perform realisation of {self.name} '
+                f'with gridsize = {gridsize}, as gridsize is not '
+                f'evenly divisible by {nprocs} processes.'
+            )
+
+        for dim in range(3):
+            if gridsize%domain_subdivisions[dim] != 0:
+                abort(
+                    f'Cannot perform realisation of {self.name} '
+                    f'with gridsize = {gridsize}, as the global grid of shape '
+                    f'({gridsize}, {gridsize}, {gridsize}) cannot be divided '
+                    f'according to the domain decomposition ({domain_subdivisions[0]}, '
+                    f'{domain_subdivisions[1]}, {domain_subdivisions[2]}).'
+                )
+
+    # Method for communicating ghost points of all fluid variables
+    @cython.header(
+        # Arguments
+        operation=str,
+        # Locals
+        fluidscalar='FluidScalar',
+    )
+    def communicate_fluid_grids(self, operation):
+        for multi_index in self.fluidvar.multi_indices:
+
+            fluidscalar= self.fluidvar[multi_index]
+            communicate_ghosts(fluidscalar.grid_mv, operation)
+
+    # Method for adding component sources to the tensor girds
+    @cython.pheader(
+        components=list,
+        component = 'Component',
+        w = 'double',
+        w_eff = 'double',
+        a = 'double',
+        rho_prefactor = 'double',
+        rho_scalar = 'FluidScalar',
+        field_scalar = 'FluidScalar',
+        rho_ptr = 'double*',
+        field_ptr = 'double*',
+        index = 'Py_ssize_t',
+    )
+    def add_sources(self, components):
+
+        a = universals.a
+
+        for component in components:
+            w = component.w(a=universals.a)
+            w_eff = component.w_eff(a = universals.a)
+
+            rho_prefactor = 1 / a**(3*(1+w_eff))
+
+            # Pointer to fluid density grid
+            rho_scalar = component.ϱ
+            rho_ptr = rho_scalar.grid
+
+            field_scalar = self.fluidvar[0]
+            field_ptr = field_scalar.grid
+
+            for index in range(self.size):
+                field_ptr[index] += rho_prefactor * rho_ptr[index]
+
+    @cython.pheader(
+        index='Py_ssize_t',
+        solution_ptr = 'double*',
+        field_ptr = 'double*',
+        field_scalar = 'FluidScalar',
+        components='list',
+    )
+    def make_potential(self, components):
+        self.add_sources(components)
+
+        field_scalar = self.fluidvar[0]
+        field_ptr = field_scalar.grid
+
+        solution_ptr = cython.address(inverse_laplacian(field_scalar.grid_mv)[:, :, :])
+
+        for index in range(self.size):
+            field_ptr[index] = solution_ptr[index]
 
 # The class containing the metric perturbations
 @cython.cclass
@@ -1123,31 +1316,36 @@ class TensorField:
 
         JJ_prefactor = a**(3*w_eff + 2.) / (1 + w)
 
-        # Pointer to fluid density grid
-        rho_scalar = component.ϱ
-        rho_ptr = rho_scalar.grid
+        if component.original_representation == 'particles':
+            self.add(component.fluidvars[2], JJ_prefactor)
 
-        # Now add the fluid momentum density contribution
-        for dim1 in range(3):
-            for dim2 in range(dim1+1):
+        else:
 
-                # Momentum density scalars
-                J1_scalar = component.J[dim1]
-                J2_scalar = component.J[dim2]
+            # Pointer to fluid density grid
+            rho_scalar = component.ϱ
+            rho_ptr = rho_scalar.grid
 
-                # Momentum density pointers
-                J1_ptr = J1_scalar.grid
-                J2_ptr = J2_scalar.grid
+            # Now add the fluid momentum density contribution
+            for dim1 in range(3):
+                for dim2 in range(dim1+1):
 
-                # Pointer to the field we add to
-                field_scalar = self.fluidvar[dim1, dim2]
-                field_ptr = field_scalar.grid
+                    # Momentum density scalars
+                    J1_scalar = component.J[dim1]
+                    J2_scalar = component.J[dim2]
 
-                for index in range(self.size):
-                    if rho_ptr[index] ==0:
-                        continue
+                    # Momentum density pointers
+                    J1_ptr = J1_scalar.grid
+                    J2_ptr = J2_scalar.grid
 
-                    field_ptr[index] += JJ_prefactor * J1_ptr[index] * J2_ptr[index] / rho_ptr[index]
+                    # Pointer to the field we add to
+                    field_scalar = self.fluidvar[dim1, dim2]
+                    field_ptr = field_scalar.grid
+
+                    for index in range(self.size):
+                        if rho_ptr[index] == 0:
+                            continue
+
+                        field_ptr[index] += JJ_prefactor * J1_ptr[index] * J2_ptr[index] / rho_ptr[index]
 
 @cython.cclass
 class TensorComponent:
@@ -1304,12 +1502,20 @@ class TensorComponent:
     @cython.pheader(
         state = 'TensorComponent',
         components = 'list',
+        potential='ScalarField',
         index = 'Py_ssize_t',
         component = 'Component',
         R = 'double',
         Rpp = 'double',
+        field_scalar='FluidScalar',
+        potential_scalar='FluidScalar',
+        field_ptr='double*',
+        potential_ptr='double*',
+        grad1_ptr='double*',
+        grad2_ptr='double*',
+        hesse12_ptr='double*',
     )
-    def source(self, components, R, Rpp):
+    def source(self, components, potential, R, Rpp):
         masterprint('Effective Mass Squared:', Rpp/R)
 
         self.ddu.add(self.u.fluidvar, Rpp/R)
@@ -2047,8 +2253,8 @@ class Component:
         self.boltzmann_order = boltzmann_order
 
         if self.representation == 'particles':
-            # Manually set the boltzmann order to 1 so that we do not mesh the T_{ij}
-            self.boltzmann_order = 1
+            # Manually set the boltzmann order to 2 so that we do mesh the T_{ij}
+            self.boltzmann_order = 2
 
         elif self.representation == 'fluid':
             if self.boltzmann_order < -1:
