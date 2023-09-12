@@ -39,7 +39,7 @@ cimport(
 )
 cimport('from snapshot import get_initial_conditions, save')
 cimport('from utilities import delegate')
-cimport('from species import TensorComponent, source_decay')
+cimport('from species import TensorComponent, source_decay, ScalarField')
 cimport('from mesh import convert_particles_to_fluid')
 
 # Pure Python imports
@@ -172,15 +172,19 @@ def timeloop():
             component.gridsize = rhs_evals[0].gridsize
             convert_particles_to_fluid(component, SmoothingKernelOrder)
 
+    # Initialize the scalar potential
+    scalar_potential = ScalarField(gridsize = gw_mesh_size)
+    scalar_potential.make_potential(components)
+
     # If we are starting a new simulation, we need to evaluate the RHS due to our 
     # timestepping loop-structure. If we are restarting, we skip this.
     if gwFile_4 == '':
         masterprint('Sourcing the RHS outside the time-stepping loop for first-step')
-        rhs_evals[4].source(components, universals.a, a_to_app(universals.a))
+        rhs_evals[4].source(components, scalar_potential, universals.a, a_to_app(universals.a))
 
     # Possibly output at the beginning of simulation
     if dump_times[0].t == universals.t or dump_times[0].a == universals.a:
-        dump(components, rhs_evals[4], output_filenames, dump_times[0])
+        dump(components, rhs_evals[4], scalar_potential, output_filenames, dump_times[0])
         dump_times.pop(0)
         # Return now if all dumps lie at the initial time
         if len(dump_times) == 0:
@@ -297,10 +301,12 @@ def timeloop():
         # We are now done with the meshed particle data so we nullify fluid meshes
         # and return to a particle representation
         for component in components:
-            if component.original_representation == 'particles':
-                if component.representation == 'fluid':
-                    component.resize(1)
-                    component.representation = 'particles'
+            if component.original_representation == 'particles' and component.representation == 'fluid':
+                component.resize(1)
+                component.representation = 'particles'
+                    
+        # We are also done with the scalar potential
+        scalar_potential.resize(1)
 
         ##########################################################
         ###   Here we update the rung and tiling assignments   ###
@@ -375,6 +381,8 @@ def timeloop():
         # Half a short-range kick
         kick_short(components, Δt)
 
+        masterprint('Completed the init half of the step')
+
         ###############################################################
         ###   After performing an initial step, we then perform a   ### 
         ###   a full step that ends with synchronized states        ###
@@ -402,6 +410,7 @@ def timeloop():
         if universals.t + Δt_reltol*Δt + 2*machine_ϵ > sync_time:
             universals.t = sync_time
         universals.a = scale_factor(universals.t)
+        masterprint('Completed the full half of the step')
 
         #################################################################
         ###   Now we source the remaining half of the radiation and   ###
@@ -417,18 +426,21 @@ def timeloop():
         # Source the decay radiation
         if len(components) == 2:
             masterprint('Sourcing Decay Radiation')
-
             if components[1].name == 'DecayRadiation':
                 source_decay(components[0], components[1], scale_factor(universals.t-Δt/2.), scale_factor(universals.t))
             elif components[0].name == 'DecayRadiation':
                 source_decay(components[1], components[0], scale_factor(universals.t-Δt/2.), scale_factor(universals.t))
 
+        # Initialize the scalar potential
+        scalar_potential = ScalarField(gridsize = gw_mesh_size)
+        scalar_potential.make_potential(components)
+
         # Calculate the RHS for the predictor at n+1.
-        rhs_evals[5].source(components, universals.a, a_to_app(universals.a))
+        rhs_evals[5].source(components, scalar_potential, universals.a, a_to_app(universals.a))
 
         # Now using the predictor, do the evaluate-correct step
         rhs_evals[6].update(rhs_evals[:6], False, dConfTime)
-        rhs_evals[6].source(components, universals.a, a_to_app(universals.a))
+        rhs_evals[6].source(components, scalar_potential, universals.a, a_to_app(universals.a))
 
         # Now remove the first state in the RHS_Evals list because we are done with it
         rhs_evals[0].resize(1)
@@ -450,7 +462,7 @@ def timeloop():
         if time_step % SaveInterval == 0 or time_step % CheckPointInterval < 5 and time_step >= CheckPointInterval:
 
             dump_time = DumpTime('a', t=None, a = universals.a)
-            dump(components, rhs_evals[4], output_filenames, dump_time, Δt)
+            dump(components, rhs_evals[4], scalar_potential, output_filenames, dump_time, Δt)
 
         # Print out message at the end of each time step
         if time_step > initial_time_step:
@@ -1657,6 +1669,7 @@ def initialize_rung_populations(components, Δt):
 @cython.header(
     # Arguments
     components=list,
+    scalar_potential=object,
     tensor_perturbations=object, # the tensor perturbations to be saved
     output_filenames=dict,
     dump_time=object,  # collections.namedtuple
@@ -1669,7 +1682,7 @@ def initialize_rung_populations(components, Δt):
     time_value='double',
     returns='bint',
 )
-def dump(components, tensor_perturbations, output_filenames, dump_time, Δt=0):
+def dump(components, tensor_perturbations, scalar_potential, output_filenames, dump_time, Δt=0):
     time_param = dump_time.time_param
     time_value = {'t': dump_time.t, 'a': dump_time.a}[time_param]
     any_activations = False
@@ -1684,7 +1697,7 @@ def dump(components, tensor_perturbations, output_filenames, dump_time, Δt=0):
         filename = output_filenames['snapshot'].format(time_param, time_value)
         if time_param == 't':
             filename += unit_time
-        save(components, tensor_perturbations, filename)
+        save(components, tensor_perturbations, scalar_potential, filename)
     # Dump power spectrum
     if time_value in powerspec_times[time_param]:
         filename = output_filenames['powerspec'].format(time_param, time_value)

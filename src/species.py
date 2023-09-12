@@ -42,9 +42,15 @@ cimport(
     '    species_canonical, species_registered,    '
 )
 
-cimport('from mesh import spectral_laplacian, get_fftw_slab, domain_decompose, inverse_laplacian')
-cimport('from analysis import measure')
-
+cimport(
+    'from mesh import        '
+    '    get_fftw_slab,      '
+    '    domain_decompose,   '
+    '    spectral_laplacian, '
+    '    inverse_laplacian,  '
+    '    get_grad,           '
+    '    get_hesse,          '
+)
 
 # Method for sourcing the decay radiation from the
 # decaying dark matter
@@ -1074,6 +1080,7 @@ class ScalarField:
             w_eff = component.w_eff(a = universals.a)
 
             rho_prefactor = 1 / a**(3*(1+w_eff))
+            masterprint(component.name, rho_prefactor)
 
             # Pointer to fluid density grid
             rho_scalar = component.ϱ
@@ -1093,6 +1100,9 @@ class ScalarField:
         components='list',
     )
     def make_potential(self, components):
+
+        pot_factor = 4 * π * G_Newton/light_speed**2 * universals.a**2
+        masterprint('Potential Factor:' , pot_factor)
         self.add_sources(components)
 
         field_scalar = self.fluidvar[0]
@@ -1101,7 +1111,7 @@ class ScalarField:
         solution_ptr = cython.address(inverse_laplacian(field_scalar.grid_mv)[:, :, :])
 
         for index in range(self.size):
-            field_ptr[index] = solution_ptr[index]
+            field_ptr[index] = pot_factor * solution_ptr[index]
 
 # The class containing the metric perturbations
 @cython.cclass
@@ -1291,7 +1301,47 @@ class TensorField:
             for index in range(self.size):
                 field_ptr[index] += source_ptr[index]
 
-    # Method for adding component sources to the tensor girds
+    # Method for adding potential sources to the tensor grids
+    @cython.pheader(
+        scalar_potential = 'ScalarField',
+        field_scalar = 'FluidScalar',
+        field_ptr = 'double*',
+        source_scalar = 'FluidScalar',
+        source_ptr1='double*',
+        source_ptr2='double*',
+        source_ptr3='double*',
+        source_ptr4='double*',
+        index='Py_ssize_t',
+    )
+    def add_potential(self, scalar_potential):
+        source_scalar = scalar_potential.fluidvar[0]
+
+        # Pointer to the undifferentiated scalar potential
+        source_ptr1 = source_scalar.grid
+
+        for dim1 in range(3):
+
+            # The Grad-i component
+            source_ptr2 = cython.address(get_grad(source_scalar.grid_mv, dim1, 'grad_i')[:, :, :])
+
+            for dim2 in range(dim1+1):
+
+                # The Grad-j component
+                source_ptr3 = cython.address(get_grad(source_scalar.grid_mv, dim2, 'grad_j')[:, :, :])
+
+                # The Hessian component
+                source_ptr4 = cython.address(get_hesse(source_scalar.grid_mv, dim1, dim2, 'hesse_ij')[:, :, :])
+
+                # What we add to
+                field_scalar = self.fluidvar[dim1, dim2]
+                field_ptr = field_scalar.grid
+
+                # Loop
+                for index in range(self.size):
+                    field_ptr[index] += -8 * universals.a * source_ptr2[index] * source_ptr3[index]
+                    field_ptr[index] += -16 * universals.a * source_ptr1[index] * source_ptr4[index]
+
+    # Method for adding component sources to the tensor grids
     @cython.pheader(
         component = 'Component',
         w = 'double',
@@ -1314,7 +1364,10 @@ class TensorField:
         w = component.w(a=universals.a)
         w_eff = component.w_eff(a = universals.a)
 
-        JJ_prefactor = a**(3*w_eff + 2.) / (1 + w)
+        JJ_prefactor = 32 * π * G_Newton / light_speed**4 * a**3
+        JJ_prefactor *= a**(3*w_eff - 1.) / (1 + w)
+
+        masterprint(component.name, JJ_prefactor)
 
         if component.original_representation == 'particles':
             self.add(component.fluidvars[2], JJ_prefactor)
@@ -1500,26 +1553,18 @@ class TensorComponent:
         self.u.add(rhs_evals[3].u.fluidvar, -1.)
 
     @cython.pheader(
-        state = 'TensorComponent',
         components = 'list',
-        potential='ScalarField',
-        index = 'Py_ssize_t',
         component = 'Component',
+        scalar_potential='ScalarField',
         R = 'double',
         Rpp = 'double',
-        field_scalar='FluidScalar',
-        potential_scalar='FluidScalar',
-        field_ptr='double*',
-        potential_ptr='double*',
-        grad1_ptr='double*',
-        grad2_ptr='double*',
-        hesse12_ptr='double*',
     )
-    def source(self, components, potential, R, Rpp):
+    def source(self, components, scalar_potential, R, Rpp):
         masterprint('Effective Mass Squared:', Rpp/R)
 
         self.ddu.add(self.u.fluidvar, Rpp/R)
         self.ddu.add_laplacian(self.u.fluidvar)
+        self.ddu.add_potential(scalar_potential)
 
         for component in components:
             self.ddu.add_source(component)

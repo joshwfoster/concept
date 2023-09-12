@@ -317,6 +317,11 @@ class CosmoResults:
         #filename='/u/jwfoster/concept/.reusable/class/998b753a99.hdf5'
 
         gauge = (params if params else {}).get('gauge', 'synchronous').lower()
+        masterprint('Gauge:', gauge)
+  
+        gauge = 'newtonian'
+        masterprint('Gauge:', gauge)
+
         self.needed_keys = {
             # Background data as function of time
             'background': {
@@ -340,7 +345,7 @@ class CosmoResults:
                 # Time
                 r'^a$',
                 # Other
-                *([r'^h_prime$'] if gauge == 'synchronous' else []),
+                *([r'^h_prime$'] if gauge == 'synchronous' or gauge == 'newtonian' else []),
                 r'^theta_tot$',
             },
         }

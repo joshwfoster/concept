@@ -2605,9 +2605,6 @@ def fourier_operate(slab, deconv_order=0, interlace_flag=0, diff_dim=-1):
         slab_ptr[index + 1] = im
     return slab
 
-
-
-
 # Function returning the spectral laplacian as applied to a grid
 @cython.pheader(
     # Arguments
@@ -2621,10 +2618,12 @@ def fourier_operate(slab, deconv_order=0, interlace_flag=0, diff_dim=-1):
     slab_size_k='Py_ssize_t',
     slab_ptr='double*',
     gridsize='Py_ssize_t',
+    _nyquist='Py_ssize_t',
     index='Py_ssize_t',
     ki='Py_ssize_t',
     kj='Py_ssize_t',
     kk='Py_ssize_t',
+    diff_k='Py_ssize_t',
     k_unit='double',
     factor='double',
     θ='double',
@@ -2634,7 +2633,7 @@ def fourier_operate(slab, deconv_order=0, interlace_flag=0, diff_dim=-1):
     new_grid = 'double[:, :, ::1]',
     returns='double[:, :, ::1]',
 )
-def spectral_grad(grid, diff_dim, grad_name):
+def get_grad(grid, diff_dim, grad_name):
     
     # Slab decompose and fourier transform the input grid
     slab = slab_decompose(grid, slab_or_buffer_name = 'grad slab buffer ' + grad_name, prepare_fft = True)
@@ -2645,15 +2644,22 @@ def spectral_grad(grid, diff_dim, grad_name):
     slab_ptr = cython.address(slab[:, :, :])
     gridsize = slab_size_i
 
+    # get nyquist details
+    _nyquist = gridsize//2
+
     # Get the fundamental wavenumber in units of 1/Mpc 
     k_unit = ℝ[2*π / (boxsize * units.Mpc)]
  
     for index, ki, kj, kk, factor, θ in fourier_loop(gridsize,with_nyquist=True):
-        factor = k_unit * (  (-𝔹[diff_dim == 0] & ki)
-                           | (-𝔹[diff_dim == 1] & kj)
-                           | (-𝔹[diff_dim == 2] & kk)
-                          )
+        diff_k = (  (-𝔹[diff_dim == 0] & ki)
+                  | (-𝔹[diff_dim == 1] & kj)
+                  | (-𝔹[diff_dim == 2] & kk)
+                 )
 
+        if diff_k == _nyquist:
+            diff_k *= -1
+
+        factor = k_unit * diff_k 
 
         re = slab_ptr[index    ]
         im = slab_ptr[index + 1]
@@ -2671,8 +2677,6 @@ def spectral_grad(grid, diff_dim, grad_name):
     shape = get_gridshape_local(gridsize)
     new_grid = get_buffer(shape, 'grad grid buffer' + grad_name, nullify = True)
     return domain_decompose(slab, new_grid, do_ghost_communication=True)
-
-
 
 # Function returning the spectral laplacian as applied to a grid
 @cython.pheader(
@@ -2700,10 +2704,10 @@ def spectral_grad(grid, diff_dim, grad_name):
     new_grid = 'double[:, :, ::1]',
     returns='double[:, :, ::1]',
 )
-def spectral_hesse(grid, diff_dim_i, diff_dim_j):
+def get_hesse(grid, diff_dim_i, diff_dim_j, hesse_name):
     
     # Slab decompose and fourier transform the input grid
-    slab = slab_decompose(grid, slab_or_buffer_name = 'hesse slab buffer', prepare_fft = True)
+    slab = slab_decompose(grid, slab_or_buffer_name = 'hesse slab buffer' + hesse_name, prepare_fft = True)
     fft(slab, 'forward', apply_forward_normalization=True)    
 
     # Extract slab shape and pointer
@@ -2721,7 +2725,7 @@ def spectral_hesse(grid, diff_dim_i, diff_dim_j):
                    | (-𝔹[diff_dim_i == 1] & kj)
                    | (-𝔹[diff_dim_i == 2] & kk)
                    )
-        factor *= ( (-𝔹[diff_dim_j == 0] & ki)
+        factor *= (  (-𝔹[diff_dim_j == 0] & ki)
                    | (-𝔹[diff_dim_j == 1] & kj)
                    | (-𝔹[diff_dim_j == 2] & kk)
                    )
@@ -2735,11 +2739,8 @@ def spectral_hesse(grid, diff_dim_i, diff_dim_j):
 
     # Create an Empty Buffer to Domain Decompose
     shape = get_gridshape_local(gridsize)
-    new_grid = get_buffer(shape, 'hesse grid buffer', nullify = True)
+    new_grid = get_buffer(shape, 'hesse grid buffer' + hesse_name, nullify = True)
     return domain_decompose(slab, new_grid, do_ghost_communication=True)
-
-
-
 
 # Function returning the spectral laplacian as applied to a grid
 @cython.pheader(
