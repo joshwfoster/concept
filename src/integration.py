@@ -918,15 +918,13 @@ def init_time(reinitialize=False):
 
             masterprint('Replacing class with my result')
 
-            # This is my call
-            import h5py
-            cosmo_archive = h5py.File(CosmoFile, 'r')
-            background = cosmo_archive['background']
+            with open_hdf5(CosmoFile, mode='r', driver='mpio', comm=comm) as cosmo_archive:
+                background = cosmo_archive['background']
 
-            a_values = asarray(background['a'])
-            t_values = asarray(background['proper time [Gyr]'])*units.Gyr
-            H_values = asarray(background['H [1__per__Mpc]'])*(light_speed/units.Mpc)
-            tau_values = asarray(background['conf. time [Mpc]']) * units.Mpc # / light_speed * units.Gyr
+                a_values = asarray(background['a'])
+                t_values = asarray(background['proper time [Gyr]'])*units.Gyr
+                H_values = asarray(background['H [1__per__Mpc]'])*(light_speed/units.Mpc)
+                tau_values = asarray(background['conf. time [Mpc]']) * units.Mpc # / light_speed * units.Gyr
 
             masterprint('Time initialized from cosmo background')
             masterprint(a_values[-1],t_values[-1], H_values[-1],tau_values[-1])
