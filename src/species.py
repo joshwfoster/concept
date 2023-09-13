@@ -42,95 +42,7 @@ cimport(
     '    species_canonical, species_registered,    '
 )
 
-cimport(
-    'from mesh import        '
-    '    get_fftw_slab,      '
-    '    domain_decompose,   '
-    '    spectral_laplacian, '
-    '    inverse_laplacian,  '
-    '    get_grad,           '
-    '    get_hesse,          '
-)
 
-# Method for sourcing the decay radiation from the
-# decaying dark matter
-@cython.pheader(
-    # Arguments
-    donor_component = 'Component',
-    receiver_component = 'Component',
-    a1 = 'double',
-    a2 = 'double',
-    # Locals
-    donor_scalar='FluidScalar',
-    donor_grid='double*',
-    donor_rho_total='double',
-    receiver_scalar='FluidScalar',
-    receiver_grid='double*',
-    receiver_rho_total='double',
-    index='Py_ssize_t',
-    dim='Py_ssize_t',
-    w = 'double',
-    w_eff_1 = 'double',
-    w_eff_2 = 'double',
-    rescale_factor='double',
-    add_factor = 'double',
-)
-def source_decay(donor_component, receiver_component, a1, a2):
-
-    #######################################
-    ###   Sourcing the Energy Density   ###
-    #######################################
-
-    # The donor scalar and grid
-    donor_scalar = donor_component.ϱ
-    donor_grid = donor_scalar.grid
-    donor_rho_total = donor_component._ϱ_bar
-
-    # The receiver scalar and grid
-    receiver_scalar = receiver_component.ϱ
-    receiver_grid = receiver_scalar.grid
-    receiver_rho_total = receiver_component._ϱ_bar
-
-    # Here we calculate how much to homogeneously rescale out of the receiver density
-    w = receiver_component.w(a=a1)
-    w_eff_1 = receiver_component.w_eff(a = a1)
-    w_eff_2 = receiver_component.w_eff(a = a2)
-
-    # This rescales away the dependence on the effective equation of state
-    # so that the quantity a^3*ϱ is conserved.
-    rescale_factor = a2**(3 * (w_eff_2-w) ) / a1**(3 * (w_eff_1-w))
-
-    # This is how much total we took away from the receiver grid
-    add_factor = (1-rescale_factor) * receiver_rho_total / donor_rho_total
-
-    for index in range(receiver_component.size):
-        receiver_grid[index] *= rescale_factor
-        receiver_grid[index] += add_factor * donor_grid[index]
-
-    #########################################
-    ###   Sourcing the Momentum Density   ###
-    #########################################
-
-    w_eff_1 = donor_component.w_eff(a = a1)
-    w_eff_2 = donor_component.w_eff(a = a2)
-
-    # This is the mass loss fraction due to decay
-    rescale_factor = a1**(3*w_eff_1) / a2**(3*w_eff_2)
-
-    # This is now the fraction of momentum transferred to the fluid
-    rescale_factor = 1. - rescale_factor
-
-    for dim in range(3):
-        donor_scalar = donor_component.J[dim]
-        donor_grid = donor_scalar.grid
-
-        receiver_scalar = receiver_component.J[dim]
-        receiver_grid = receiver_scalar.grid
-
-        for index in range(receiver_component.size):
-            receiver_grid[index] += rescale_factor * donor_grid[index]
-
-    receiver_component.communicate_fluid_grids('=')
 
 # Class which serves as the data structure for fluid variables,
 # efficiently and elegantly implementing symmetric
@@ -499,6 +411,8 @@ class FluidScalar:
                                              ', '.join([str(mi) for mi in self.multi_index]))
     def __str__(self):
         return self.__repr__()
+
+
 
 # Class providing the data structure for particle tiling.
 # Though the variable naming only refer to tiles (within a domain),
@@ -914,673 +828,6 @@ class Tiling:
     def __str__(self):
         return self.__repr__()
 
-# The class containing the metric perturbations
-@cython.cclass
-class ScalarField:
-    """An instance of this class represents the collection of u_{ij} metric
-       perturbations
-    """
-
-    # Initialisation method
-    @cython.pheader(
-        # Arguments
-        gridsize='Py_ssize_t',
-        boltzmann_order='Py_ssize_t',
-        boltzmann_closure=str,
-        # Locals
-        tile_index='signed char',
-        index='Py_ssize_t',
-        indexᵖ='Py_ssize_t',
-    )
-    def __init__(self, *, gridsize=-1, boltzmann_order=0, boltzmann_closure='truncate'):
-
-        """
-        public str name
-        public Py_ssize_t gridsize
-        public str representation
-        public str species
-        public Py_ssize_t boltzmann_order
-        public str boltzmann_closure
-        public tuple shape
-        public tuple shape_noghosts
-        public Py_ssize_t size
-        public Py_ssize_t size_noghosts
-        public object fluidvar
-        """
-
-        self.name = 'Scalar Field'
-        self.gridsize = gridsize
-        self.representation = 'Scalar'
-        self.species = 'Scalar Field'
-
-        # Warn if weird gridsize
-        if self.gridsize%2 != 0:
-            masterwarn(
-                f'{self.name.capitalize()} has an odd grid size ({self.gridsize}). '
-                f'Some operations may not function correctly.'
-            )
-
-        # Set Boltzmann order and closure for the tensor
-        self.boltzmann_order = boltzmann_order
-        self.boltzmann_closure = boltzmann_closure
-
-        self.shape = (1, 1, 1)
-        self.shape_noghosts = (1, 1, 1)
-        self.size = np.prod(self.shape)
-        self.size_noghosts = np.prod(self.shape_noghosts)
-
-        # Generate the field variables
-        self.fluidvar = Tensor(self, boltzmann_order, (3, )*boltzmann_order, symmetric=True)
-
-        for multi_index in self.fluidvar.multi_indices:
-            self.fluidvar[multi_index] = FluidScalar(0, multi_index, is_linear=True)
-
-        self.realize()
-
-    # This method will grow/shrink the data attributes.
-    # Note that it will update N_allocated but not N_local.
-    @cython.pheader(
-        # Arguments
-        size_or_shape_noghosts=object,  # Py_ssize_t or tuple
-        # Locals
-        fluidscalar='FluidScalar',
-        multi_index=object,
-        i='Py_ssize_t',
-        s='Py_ssize_t',
-        shape_noghosts=tuple,
-        size='Py_ssize_t',
-        size_old='Py_ssize_t',
-        s_old='Py_ssize_t',
-    )
-    def resize(self, size_or_shape_noghosts):
-        shape_noghosts = tuple(any2list(size_or_shape_noghosts))
-        if len(shape_noghosts) == 1:
-            shape_noghosts *= 3
-        if not any([
-            s + 2*nghosts != s_old
-            for s, s_old in zip(shape_noghosts, self.shape)
-        ]):
-            return
-        if any([s < 1 for s in shape_noghosts]):
-            abort(
-                f'Attempted to resize fluid grids of {self.name} '
-                f'to a shape of {shape_noghosts}'
-            )
-
-        # Recalculate and reassign meta data
-        self.shape          = tuple([s + 2*nghosts for s in shape_noghosts])
-        self.shape_noghosts = shape_noghosts
-        self.size           = np.prod(self.shape)
-        self.size_noghosts  = np.prod(self.shape_noghosts)
-
-        # Reallocate fluid data
-        for multi_index in self.fluidvar.multi_indices:
-            fluidscalar=self.fluidvar[multi_index]
-            fluidscalar.resize(shape_noghosts)
-
-    # Method for 3D realisation of linear transfer functions.
-    # As all arguments are optional,
-    # this has to be a pure Python method.
-    def realize(self):
-
-        gridsize = self.gridsize
-        shape = tuple([gridsize//domain_subdivisions[dim] for dim in range(3)])
-        self.resize(shape)
-
-        if gridsize%nprocs != 0:
-            abort(
-                f'Cannot perform realisation of {self.name} '
-                f'with gridsize = {gridsize}, as gridsize is not '
-                f'evenly divisible by {nprocs} processes.'
-            )
-
-        for dim in range(3):
-            if gridsize%domain_subdivisions[dim] != 0:
-                abort(
-                    f'Cannot perform realisation of {self.name} '
-                    f'with gridsize = {gridsize}, as the global grid of shape '
-                    f'({gridsize}, {gridsize}, {gridsize}) cannot be divided '
-                    f'according to the domain decomposition ({domain_subdivisions[0]}, '
-                    f'{domain_subdivisions[1]}, {domain_subdivisions[2]}).'
-                )
-
-    # Method for communicating ghost points of all fluid variables
-    @cython.header(
-        # Arguments
-        operation=str,
-        # Locals
-        fluidscalar='FluidScalar',
-    )
-    def communicate_fluid_grids(self, operation):
-        for multi_index in self.fluidvar.multi_indices:
-
-            fluidscalar= self.fluidvar[multi_index]
-            communicate_ghosts(fluidscalar.grid_mv, operation)
-
-    # Method for adding component sources to the tensor girds
-    @cython.pheader(
-        components=list,
-        component = 'Component',
-        w = 'double',
-        w_eff = 'double',
-        a = 'double',
-        rho_prefactor = 'double',
-        rho_scalar = 'FluidScalar',
-        field_scalar = 'FluidScalar',
-        rho_ptr = 'double*',
-        field_ptr = 'double*',
-        index = 'Py_ssize_t',
-    )
-    def add_sources(self, components):
-
-        a = universals.a
-
-        for component in components:
-            w = component.w(a=universals.a)
-            w_eff = component.w_eff(a = universals.a)
-
-            rho_prefactor = 1 / a**(3*(1+w_eff))
-            masterprint(component.name, rho_prefactor)
-
-            # Pointer to fluid density grid
-            rho_scalar = component.ϱ
-            rho_ptr = rho_scalar.grid
-
-            field_scalar = self.fluidvar[0]
-            field_ptr = field_scalar.grid
-
-            for index in range(self.size):
-                field_ptr[index] += rho_prefactor * rho_ptr[index]
-
-    @cython.pheader(
-        index='Py_ssize_t',
-        solution_ptr = 'double*',
-        field_ptr = 'double*',
-        field_scalar = 'FluidScalar',
-        components='list',
-    )
-    def make_potential(self, components):
-
-        pot_factor = 4 * π * G_Newton/light_speed**2 * universals.a**2
-        masterprint('Potential Factor:' , pot_factor)
-        self.add_sources(components)
-
-        field_scalar = self.fluidvar[0]
-        field_ptr = field_scalar.grid
-
-        solution_ptr = cython.address(inverse_laplacian(field_scalar.grid_mv)[:, :, :])
-
-        for index in range(self.size):
-            field_ptr[index] = pot_factor * solution_ptr[index]
-
-# The class containing the metric perturbations
-@cython.cclass
-class TensorField:
-    """An instance of this class represents the collection of u_{ij} metric
-       perturbations
-    """
-
-    # Initialisation method
-    @cython.pheader(
-        # Arguments
-        gridsize='Py_ssize_t',
-        boltzmann_order='Py_ssize_t',
-        boltzmann_closure=str,
-        # Locals
-        tile_index='signed char',
-        index='Py_ssize_t',
-        indexᵖ='Py_ssize_t',
-    )
-    def __init__(self, *, gridsize=-1, boltzmann_order=2, boltzmann_closure='truncate'):
-
-        """
-        public str name
-        public Py_ssize_t gridsize
-        public str representation
-        public str species
-        public Py_ssize_t boltzmann_order
-        public str boltzmann_closure
-        public tuple shape
-        public tuple shape_noghosts
-        public Py_ssize_t size
-        public Py_ssize_t size_noghosts
-        public object fluidvar
-        """
-
-        self.name = 'Metric Perturbations'
-        self.gridsize = gridsize
-        self.representation = 'Metric Perturbations'
-        self.species = 'Metric Perturbations'
-
-        # Warn if weird gridsize
-        if self.gridsize%2 != 0:
-            masterwarn(
-                f'{self.name.capitalize()} has an odd grid size ({self.gridsize}). '
-                f'Some operations may not function correctly.'
-            )
-
-        # Set Boltzmann order and closure for the tensor
-        self.boltzmann_order = boltzmann_order
-        self.boltzmann_closure = boltzmann_closure
-
-        self.shape = (1, 1, 1)
-        self.shape_noghosts = (1, 1, 1)
-        self.size = np.prod(self.shape)
-        self.size_noghosts = np.prod(self.shape_noghosts)
-
-        # Generate the field variables
-        self.fluidvar = Tensor(self, 2, (3, )*2, symmetric=True)
-
-        for multi_index in self.fluidvar.multi_indices:
-            self.fluidvar[multi_index] = FluidScalar(2, multi_index, is_linear=True)
-
-        self.realize()
-
-    # This method will grow/shrink the data attributes.
-    # Note that it will update N_allocated but not N_local.
-    @cython.pheader(
-        # Arguments
-        size_or_shape_noghosts=object,  # Py_ssize_t or tuple
-        # Locals
-        fluidscalar='FluidScalar',
-        multi_index=object,
-        i='Py_ssize_t',
-        s='Py_ssize_t',
-        shape_noghosts=tuple,
-        size='Py_ssize_t',
-        size_old='Py_ssize_t',
-        s_old='Py_ssize_t',
-    )
-    def resize(self, size_or_shape_noghosts):
-        shape_noghosts = tuple(any2list(size_or_shape_noghosts))
-        if len(shape_noghosts) == 1:
-            shape_noghosts *= 3
-        if not any([
-            s + 2*nghosts != s_old
-            for s, s_old in zip(shape_noghosts, self.shape)
-        ]):
-            return
-        if any([s < 1 for s in shape_noghosts]):
-            abort(
-                f'Attempted to resize fluid grids of {self.name} '
-                f'to a shape of {shape_noghosts}'
-            )
-
-        # Recalculate and reassign meta data
-        self.shape          = tuple([s + 2*nghosts for s in shape_noghosts])
-        self.shape_noghosts = shape_noghosts
-        self.size           = np.prod(self.shape)
-        self.size_noghosts  = np.prod(self.shape_noghosts)
-
-        # Reallocate fluid data
-        for multi_index in self.fluidvar.multi_indices:
-            fluidscalar=self.fluidvar[multi_index]
-            fluidscalar.resize(shape_noghosts)
-
-    # Method for 3D realisation of linear transfer functions.
-    # As all arguments are optional,
-    # this has to be a pure Python method.
-    def realize(self):
-
-        gridsize = self.gridsize
-        shape = tuple([gridsize//domain_subdivisions[dim] for dim in range(3)])
-        self.resize(shape)
-
-        if gridsize%nprocs != 0:
-            abort(
-                f'Cannot perform realisation of {self.name} '
-                f'with gridsize = {gridsize}, as gridsize is not '
-                f'evenly divisible by {nprocs} processes.'
-            )
-
-        for dim in range(3):
-            if gridsize%domain_subdivisions[dim] != 0:
-                abort(
-                    f'Cannot perform realisation of {self.name} '
-                    f'with gridsize = {gridsize}, as the global grid of shape '
-                    f'({gridsize}, {gridsize}, {gridsize}) cannot be divided '
-                    f'according to the domain decomposition ({domain_subdivisions[0]}, '
-                    f'{domain_subdivisions[1]}, {domain_subdivisions[2]}).'
-                )
-
-
-    # Method for communicating ghost points of all fluid variables
-    @cython.header(
-        # Arguments
-        operation=str,
-        # Locals
-        fluidscalar='FluidScalar',
-    )
-    def communicate_fluid_grids(self, operation):
-        for multi_index in self.fluidvar.multi_indices:
-
-            fluidscalar= self.fluidvar[multi_index]
-            communicate_ghosts(fluidscalar.grid_mv, operation)
-
-    # Method for adding the grids together
-    @cython.pheader(
-        rhs = object,
-        weight = 'double',
-        field_ptr = 'double*',
-        source_ptr = 'double*',
-        index='Py_ssize_t',
-        multi_index=object,
-        field_scalar = 'FluidScalar',
-        source_scalar = 'FluidScalar',
-    )
-    def add(self, rhs, weight):
-        for multi_index in self.fluidvar.multi_indices:
-            field_scalar = self.fluidvar[multi_index]
-            source_scalar = rhs[multi_index]
-
-            field_ptr = field_scalar.grid
-            source_ptr = source_scalar.grid
-
-            for index in range(self.size):
-                field_ptr[index] += source_ptr[index]*weight
-
-    # Method for adding the grids together
-    @cython.pheader(
-        rhs = object,
-        field_ptr = 'double*',
-        source_ptr = 'double*',
-        index='Py_ssize_t',
-        multi_index=object,
-        field_scalar = 'FluidScalar',
-        source_scalar = 'FluidScalar',
-    )
-    def add_laplacian(self, rhs):
-
-        for multi_index in self.fluidvar.multi_indices:
-            field_scalar = self.fluidvar[multi_index]
-            source_scalar = rhs[multi_index]
-
-            field_ptr = field_scalar.grid
-            source_ptr = cython.address(spectral_laplacian(source_scalar.grid_mv)[:, :, :])
-
-            for index in range(self.size):
-                field_ptr[index] += source_ptr[index]
-
-    # Method for adding potential sources to the tensor grids
-    @cython.pheader(
-        scalar_potential = 'ScalarField',
-        field_scalar = 'FluidScalar',
-        field_ptr = 'double*',
-        source_scalar = 'FluidScalar',
-        source_ptr1='double*',
-        source_ptr2='double*',
-        source_ptr3='double*',
-        source_ptr4='double*',
-        index='Py_ssize_t',
-    )
-    def add_potential(self, scalar_potential):
-        source_scalar = scalar_potential.fluidvar[0]
-
-        # Pointer to the undifferentiated scalar potential
-        source_ptr1 = source_scalar.grid
-
-        for dim1 in range(3):
-
-            # The Grad-i component
-            source_ptr2 = cython.address(get_grad(source_scalar.grid_mv, dim1, 'grad_i')[:, :, :])
-
-            for dim2 in range(dim1+1):
-
-                # The Grad-j component
-                source_ptr3 = cython.address(get_grad(source_scalar.grid_mv, dim2, 'grad_j')[:, :, :])
-
-                # The Hessian component
-                source_ptr4 = cython.address(get_hesse(source_scalar.grid_mv, dim1, dim2, 'hesse_ij')[:, :, :])
-
-                # What we add to
-                field_scalar = self.fluidvar[dim1, dim2]
-                field_ptr = field_scalar.grid
-
-                # Loop
-                for index in range(self.size):
-                    field_ptr[index] += -8 * universals.a * source_ptr2[index] * source_ptr3[index]
-                    field_ptr[index] += -16 * universals.a * source_ptr1[index] * source_ptr4[index]
-
-    # Method for adding component sources to the tensor grids
-    @cython.pheader(
-        component = 'Component',
-        w = 'double',
-        w_eff = 'double',
-        a = 'double',
-        rho_prefactor = 'double',
-        JJ_prefactor = 'double',
-        rho_scalar = 'FluidScalar',
-        field_scalar = 'FluidScalar',
-        J1_scalar = 'FluidScalar',
-        J2_scalar = 'FluidScalar',
-        rho_ptr = 'double*',
-        field_ptr = 'double*',
-        J1_ptr = 'double*',
-        J2_ptr = 'double*',
-    )
-    def add_source(self, component):
-
-        a = universals.a
-        w = component.w(a=universals.a)
-        w_eff = component.w_eff(a = universals.a)
-
-        JJ_prefactor = 32 * π * G_Newton / light_speed**4 * a**3
-        JJ_prefactor *= a**(3*w_eff - 1.) / (1 + w)
-
-        masterprint(component.name, JJ_prefactor)
-
-        if component.original_representation == 'particles':
-            self.add(component.fluidvars[2], JJ_prefactor)
-
-        else:
-
-            # Pointer to fluid density grid
-            rho_scalar = component.ϱ
-            rho_ptr = rho_scalar.grid
-
-            # Now add the fluid momentum density contribution
-            for dim1 in range(3):
-                for dim2 in range(dim1+1):
-
-                    # Momentum density scalars
-                    J1_scalar = component.J[dim1]
-                    J2_scalar = component.J[dim2]
-
-                    # Momentum density pointers
-                    J1_ptr = J1_scalar.grid
-                    J2_ptr = J2_scalar.grid
-
-                    # Pointer to the field we add to
-                    field_scalar = self.fluidvar[dim1, dim2]
-                    field_ptr = field_scalar.grid
-
-                    for index in range(self.size):
-                        if rho_ptr[index] == 0:
-                            continue
-
-                        field_ptr[index] += JJ_prefactor * J1_ptr[index] * J2_ptr[index] / rho_ptr[index]
-
-@cython.cclass
-class TensorComponent:
-    """ This object represents a collection of u_{ij} and du_{ij} metric perturbations
-        at a particular instance in time
-    """
-
-    @cython.pheader(
-        # Arguments
-        gridsize='Py_ssize_t',
-        filename=str,
-    )
-    def __init__(self, *, gridsize=64, filename=''):
-        """
-        public Py_ssize_t gridsize
-        public TensorField u
-        public TensorField ddu
-        """
-
-        self.gridsize = gridsize
-        self.u = TensorField(gridsize=gridsize)
-        self.ddu = TensorField(gridsize=gridsize)
-
-        if not filename == '':
-            masterprint('Loading Tensor Perturbations from:', filename)
-            self.load_data(filename)
-
-    @cython.pheader(
-        #Arguments
-        filename=str,
-        arr=object,  # np.ndarray
-        slab='double[:, :, ::1]',
-        slab_start='Py_ssize_t',
-        index_i='Py_ssize_t',
-        index_i_file='Py_ssize_t',
-        chunk_size='Py_ssize_t',
-        domain_size_i='Py_ssize_t',
-        domain_size_j='Py_ssize_t',
-        domain_size_k='Py_ssize_t',
-    )
-    def load_data(self, filename):
-        with open_hdf5(filename, mode='r', driver='mpio', comm=comm) as hdf5_file:
-            uFields_h5 = hdf5_file['components']['MetricPerturbations']['u']
-            dduFields_h5 = hdf5_file['components']['MetricPerturbations']['ddu']
-
-            # Compute local indices of fluid grids
-            domain_size_i = self.gridsize//domain_subdivisions[0]
-            domain_size_j = self.gridsize//domain_subdivisions[1]
-            domain_size_k = self.gridsize//domain_subdivisions[2]
-
-            if master and (   self.gridsize != domain_subdivisions[0]*domain_size_i
-                           or self.gridsize != domain_subdivisions[1]*domain_size_j
-                           or self.gridsize != domain_subdivisions[2]*domain_size_k):
-                abort(
-                    f'The gridsize of the {name} component is {gridsize} '
-                    f'which cannot be equally shared among {nprocs} processes'
-                )
-
-            # Make sure fluid grids have the correct size
-            self.resize((domain_size_i, domain_size_j, domain_size_k))
-
-            # Now populate the `u` fluid grids
-            for multi_index in self.u.fluidvar.multi_indices:
-                fluidscalar_h5 = uFields_h5[f'u_{multi_index}']
-                slab = get_fftw_slab(self.gridsize)
-                slab_start = slab.shape[0]*rank
-
-                # Load in using chunks
-                chunk_size = np.min(( ℤ[slab.shape[0]], ℤ[2**30//8//self.gridsize**2], ))
-
-                arr = asarray(slab)
-                for index_i in range(0, ℤ[slab.shape[0]], chunk_size):
-                    if index_i + chunk_size > ℤ[slab.shape[0]]:
-                        chunk_size = ℤ[slab.shape[0]] - index_i
-                    index_i_file = slab_start + index_i
-                    fluidscalar_h5.read_direct(
-                        arr,
-                        source_sel=np.s_[index_i_file:(index_i_file + chunk_size), :, :],
-                        dest_sel=np.s_[index_i:(index_i + chunk_size), :, :self.gridsize],
-                    )
-                # Communicate the slabs directly to the domain decomposed fluid grids.
-                domain_decompose(slab, self.u.fluidvar[multi_index].grid_mv)
-
-            # Now populate the `ddu` fluid grids
-            for multi_index in self.ddu.fluidvar.multi_indices:
-                fluidscalar_h5 = dduFields_h5[f'ddu_{multi_index}']
-                slab = get_fftw_slab(self.gridsize)
-                slab_start = slab.shape[0]*rank
-
-                # Load in using chunks
-                chunk_size = np.min(( ℤ[slab.shape[0]], ℤ[2**30//8//self.gridsize**2], ))
-
-                arr = asarray(slab)
-                for index_i in range(0, ℤ[slab.shape[0]], chunk_size):
-                    if index_i + chunk_size > ℤ[slab.shape[0]]:
-                        chunk_size = ℤ[slab.shape[0]] - index_i
-                    index_i_file = slab_start + index_i
-                    fluidscalar_h5.read_direct(
-                        arr,
-                        source_sel=np.s_[index_i_file:(index_i_file + chunk_size), :, :],
-                        dest_sel=np.s_[index_i:(index_i + chunk_size), :, :self.gridsize],
-                    )
-                # Communicate the slabs directly to the domain decomposed fluid grids.
-                domain_decompose(slab, self.ddu.fluidvar[multi_index].grid_mv)
-
-    @cython.pheader(
-        # Arguments
-        rhs_evals=list,
-        forward_step='bint',
-        Δt='double'
-    )
-    def update(self, rhs_evals, forward_step, Δt):
-        if forward_step:
-            masterprint('Forward Step for U_{ij}')
-            self.forward_step(rhs_evals, Δt)
-        else:
-            masterprint('Backward Step for U_{ij}')
-            self.backward_step(rhs_evals, Δt)
-
-        self.u.communicate_fluid_grids('=')
-
-
-    @cython.header(
-        # Arguments
-        rhs_evals=list,
-        Δt='double'
-    )
-    def forward_step(self, rhs_evals, Δt):
-        self.u.add(rhs_evals[0].ddu.fluidvar, Δt*Δt*(19./240.))
-        self.u.add(rhs_evals[1].ddu.fluidvar, Δt*Δt*(-2./5.))
-        self.u.add(rhs_evals[2].ddu.fluidvar, Δt*Δt*(97./120.))
-        self.u.add(rhs_evals[3].ddu.fluidvar, Δt*Δt*(-11./15.))
-        self.u.add(rhs_evals[4].ddu.fluidvar, Δt*Δt*(299./240.))
-
-        self.u.add(rhs_evals[4].u.fluidvar, 2.)
-        self.u.add(rhs_evals[3].u.fluidvar, -1.)
-
-    @cython.header(
-        # Arguments
-        rhs_evals=list,
-        Δt='double'
-    )
-    def backward_step(self, rhs_evals, Δt):
-        self.u.add(rhs_evals[0].ddu.fluidvar, Δt*Δt*(1./240.))
-        self.u.add(rhs_evals[1].ddu.fluidvar, Δt*Δt*(-1./40.))
-        self.u.add(rhs_evals[2].ddu.fluidvar, Δt*Δt*(7./120.))
-        self.u.add(rhs_evals[3].ddu.fluidvar, Δt*Δt*(1./60.))
-        self.u.add(rhs_evals[4].ddu.fluidvar, Δt*Δt*(209./240.))
-        self.u.add(rhs_evals[5].ddu.fluidvar, Δt*Δt*(3./40.))
-
-        self.u.add(rhs_evals[4].u.fluidvar, 2.)
-        self.u.add(rhs_evals[3].u.fluidvar, -1.)
-
-    @cython.pheader(
-        components = 'list',
-        component = 'Component',
-        scalar_potential='ScalarField',
-        R = 'double',
-        Rpp = 'double',
-    )
-    def source(self, components, scalar_potential, R, Rpp):
-        masterprint('Effective Mass Squared:', Rpp/R)
-
-        self.ddu.add(self.u.fluidvar, Rpp/R)
-        self.ddu.add_laplacian(self.u.fluidvar)
-        self.ddu.add_potential(scalar_potential)
-
-        for component in components:
-            self.ddu.add_source(component)
-
-        self.ddu.communicate_fluid_grids('=')
-
-    # This method will grow/shrink the data attributes
-    @cython.pheader(
-        # Arguments
-        size_or_shape_noghosts=object,  # Py_ssize_t or tuple
-    )
-    def resize(self, size_or_shape_noghosts):
-        self.u.resize(size_or_shape_noghosts)
-        self.ddu.resize(size_or_shape_noghosts)
-
-
 
 # The class governing any component of the universe
 @cython.cclass
@@ -1621,7 +868,7 @@ class Component:
         class_species=None,
         realization_options=None,
         w=None,
-        boltzmann_closure='truncate',
+        boltzmann_closure=None,
         approximations=None,
         softening_length=None,
         life=None,
@@ -1684,7 +931,6 @@ class Component:
         public str name
         public str species
         public str representation
-        public str original_representation
         public dict forces
         public dict potential_gridsizes
         public dict potential_differentiations
@@ -1816,12 +1062,10 @@ class Component:
             self.N = N
             self.gridsize = 1
             self.representation = 'particles'
-            self.original_representation = 'particles'
         elif gridsize != -1:
             self.gridsize = gridsize
             self.N = 1
             self.representation = 'fluid'
-            self.original_representation = 'fluid'
             if self.gridsize%2 != 0:
                 masterwarn(
                     f'{self.name.capitalize()} has an odd grid size ({self.gridsize}). '
@@ -2296,11 +1540,12 @@ class Component:
         if boltzmann_order == -2:
             boltzmann_order = is_selected(self, select_boltzmann_order)
         self.boltzmann_order = boltzmann_order
-
         if self.representation == 'particles':
-            # Manually set the boltzmann order to 2 so that we do mesh the T_{ij}
-            self.boltzmann_order = 2
-
+            if self.boltzmann_order != 1:
+                abort(
+                    f'Particle components must have boltzmann_order = 1, '
+                    f'but boltzmann_order = {self.boltzmann_order} was specified for {self.name}'
+                )
         elif self.representation == 'fluid':
             if self.boltzmann_order < -1:
                 abort(
@@ -2325,9 +1570,6 @@ class Component:
                     f'Fluids with boltzmann_order > 2 are not implemented, '
                     f'but boltzmann_order = {self.boltzmann_order} was specified for {self.name}'
                 )
-
-        masterprint(self.name, self.boltzmann_order, self.boltzmann_closure)
-
         self.shape = (1, 1, 1)
         self.shape_noghosts = (1, 1, 1)
         self.size = np.prod(self.shape)
@@ -2389,7 +1631,6 @@ class Component:
                 fluidvar[multi_index] = FluidScalar(index, multi_index, is_linear=False)
             # Add the fluid variable to the list
             self.fluidvars.append(fluidvar)
-
         # If CLASS should be used to close the Boltzmann hierarchy,
         # we need one additional fluid variable. This should act like
         # a symmetric tensor of rank boltzmann_order, but really only a
@@ -2940,10 +2181,9 @@ class Component:
                 if cosmoresults is not None:
                     abort(f'The realize() method was called with {N_vars} variables '
                           'while cosmoresults was supplied as well')
-
         # In the case of particles,
         # momenta should be realised before positions.
-        if self.representation == 'particles':
+        if self.representation == 'particles' and variables == [0, 1]:
             variables = [1, 0]
         # Realise each of the variables in turn
         options_passed = options.copy()

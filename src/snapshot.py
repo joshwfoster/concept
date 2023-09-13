@@ -32,10 +32,12 @@ cimport('from communication import partition,                   '
         '                          smart_mpi,                   '
         )
 cimport('from mesh import domain_decompose, get_fftw_slab, slab_decompose')
-cimport('from species import Component, FluidScalar, update_species_present, TensorComponent, ScalarField')
+cimport('from species import Component, FluidScalar, update_species_present')
 
 # Pure Python imports
 import struct
+
+
 
 # Class storing a CO𝘕CEPT snapshot. Besides holding methods for
 # saving/loading, it stores component data.
@@ -81,8 +83,6 @@ class ConceptSnapshot:
         """
         public dict params
         public list components
-        public list tensor_perturbations
-        public list scalar_potentials
         public dict units
         """
         # Dict containing all the parameters of the snapshot
@@ -91,10 +91,6 @@ class ConceptSnapshot:
         self.components = []
         # Dict containing the base units in str format
         self.units = {}
-        # List of tensor perturbations to save
-        self.tensor_perturbations = []
-        # List of scalar potential to save
-        self.scalar_potentials = []
 
     # Method that saves the snapshot to an hdf5 file
     @cython.pheader(
@@ -106,8 +102,6 @@ class ConceptSnapshot:
         N_local='Py_ssize_t',
         N_str=str,
         component='Component',
-        tensor_component='TensorComponent',
-        scalar_potential='ScalarField',
         end_local='Py_ssize_t',
         fluidscalar='FluidScalar',
         indices=object,  # int or tuple
@@ -139,86 +133,12 @@ class ConceptSnapshot:
             hdf5_file.attrs['boxsize']       = correct_float(self.params['boxsize'])
             hdf5_file.attrs[unicode('Ωb')]   = correct_float(self.params['Ωb'])
             hdf5_file.attrs[unicode('Ωcdm')] = correct_float(self.params['Ωcdm'])
-
-            # Save the scalar potential
-            index = 0 # I think this is the case for the scalar potential
-            scalar_potential = self.scalar_potentials[0]
-
-            component_h5 = hdf5_file.create_group(f'components/ScalarPotential')
-            # Save the gridsize attribute
-            component_h5.attrs['gridsize'] = scalar_potential.gridsize
-            shape = (scalar_potential.gridsize, )*3
-
-            masterprint('Writing out the scalar potential ...')
-            # Save the u_ij fluid variable
-            fluidvar = scalar_potential.fluidvar
-            fluidvar_h5 = component_h5.create_group('phi')
-            for multi_index in fluidvar.multi_indices:
-                fluidscalar = fluidvar[multi_index]
-                fluidscalar_h5 = fluidvar_h5.create_dataset(f'phi_{multi_index}', shape, dtype=C2np['double'])
-
-                slab = slab_decompose(fluidscalar.grid_mv)
-                slab_start = slab.shape[0]*rank
-                slab_end = slab_start + slab.shape[0]
-                fluidscalar_h5[slab_start:slab_end, :, :,] = slab[:, :, :scalar_potential.gridsize]
-
-            masterprint('done')
-
-            # Save the tensor perturbations
-            index = 2 # this is always the case for the u_{ij}
-            tensor_component = self.tensor_perturbations[0]
-            component_h5 = hdf5_file.create_group(f'components/MetricPerturbations')
-
-            # Save the gridsize attribute
-            component_h5.attrs['gridsize'] = tensor_component.gridsize
-            shape = (tensor_component.gridsize, )*3
-
-            masterprint('Writing out the Metric Perturbations ...')
-
-            # Save the u_ij fluid variable
-            fluidvar = tensor_component.u.fluidvar
-            fluidvar_h5 = component_h5.create_group('u')
-            for multi_index in fluidvar.multi_indices:
-                fluidscalar = fluidvar[multi_index]
-                fluidscalar_h5 = fluidvar_h5.create_dataset(f'u_{multi_index}', shape, dtype=C2np['double'])
-
-                slab = slab_decompose(fluidscalar.grid_mv)
-                slab_start = slab.shape[0]*rank
-                slab_end = slab_start + slab.shape[0]
-                fluidscalar_h5[slab_start:slab_end, :, :,] = slab[:, :, :tensor_component.gridsize]
-
-            # Save the ddu_ij fluid variable
-            fluidvar = tensor_component.ddu.fluidvar
-            fluidvar_h5 = component_h5.create_group('ddu')
-            for multi_index in fluidvar.multi_indices:
-                fluidscalar = fluidvar[multi_index]
-                fluidscalar_h5 = fluidvar_h5.create_dataset(f'ddu_{multi_index}', shape, dtype=C2np['double'])
-
-                slab = slab_decompose(fluidscalar.grid_mv)
-                slab_start = slab.shape[0]*rank
-                slab_end = slab_start + slab.shape[0]
-                fluidscalar_h5[slab_start:slab_end, :, :,] = slab[:, :, :tensor_component.gridsize]
-
-            # Done saving this component
-            hdf5_file.flush()
-            Barrier()
-            masterprint('done')
-
             # Store each component as a separate group
             # within /components.
             for component in self.components:
-
                 component_h5 = hdf5_file.create_group(f'components/{component.name}')
                 component_h5.attrs['species'] = component.species
-
-                if not component.representation == 'particles' and not component.representation == 'fluid':
-                    abort(
-                        f'Does not know how to save {component.name} '
-                        f'with representation "{component.representation}"'
-                    )
-
-                if component.original_representation == 'particles':
-
+                if component.representation == 'particles':
                     N, N_local = component.N, component.N_local
                     N_lin = cbrt(N)
                     if N > 1 and isint(N_lin):
@@ -241,9 +161,7 @@ class ConceptSnapshot:
                     mom_h5 = component_h5.create_dataset('mom', (N, 3), dtype=C2np['double'])
                     pos_h5[start_local:end_local, :] = component.pos_mv3[:N_local, :]
                     mom_h5[start_local:end_local, :] = component.mom_mv3[:N_local, :]
-                    masterprint('done')
-
-                if component.representation == 'fluid':
+                elif component.representation == 'fluid':
                     # Write out progress message
                     masterprint(
                         f'Writing out {component.name} ({component.species} with '
@@ -265,7 +183,6 @@ class ConceptSnapshot:
                         fluidvar_h5 = component_h5.create_group('fluidvar_{}'.format(index))
                         for multi_index in fluidvar.multi_indices:
                             fluidscalar = fluidvar[multi_index]
-
                             fluidscalar_h5 = fluidvar_h5.create_dataset(
                                 f'fluidscalar_{multi_index}',
                                 shape,
@@ -287,12 +204,41 @@ class ConceptSnapshot:
                                 :,
                                 :,
                             ] = slab[:, :, :component.gridsize]
-
+                    # Create additional names (hard links) for the fluid
+                    # groups and data sets. The names from
+                    # component.fluid_names will be used, except for
+                    # the additional linear variable, if CLASS is used
+                    # to close the Boltzmann hierarchy
+                    # (hence the try/except).
+                    for name, indices in component.fluid_names.items():
+                        if not isinstance(name, str) or name == 'ordered':
+                            continue
+                        if isinstance(indices, int):
+                            # "name" is a fluid variable name (e.g. J,
+                            # though not ϱ as this is a fluid scalar).
+                            try:
+                                fluidvar_h5 = component_h5['fluidvar_{}'.format(indices)]
+                                component_h5[name] = fluidvar_h5
+                            except:
+                                pass
+                        else:  # indices is a tuple
+                            # "name" is a fluid scalar name (e.g. ϱ, Jx)
+                            index, multi_index = indices
+                            try:
+                                fluidvar_h5 = component_h5['fluidvar_{}'.format(index)]
+                                fluidscalar_h5 = fluidvar_h5['fluidscalar_{}'.format(multi_index)]
+                                component_h5[name] = fluidscalar_h5
+                            except:
+                                pass
+                else:
+                    abort(
+                        f'Does not know how to save {component.name} '
+                        f'with representation "{component.representation}"'
+                    )
                 # Done saving this component
                 hdf5_file.flush()
                 Barrier()
                 masterprint('done')
-
         # Done saving the snapshot
         masterprint('done')
         # Return the filename of the saved file
@@ -366,9 +312,6 @@ class ConceptSnapshot:
             self.params['Ωcdm']    = hdf5_file.attrs[unicode('Ωcdm')]
             # Load component data
             for name, component_h5 in hdf5_file['components'].items():
-                if name == 'MetricPerturbations':
-                    continue
-
                 # Determine representation from the snapshot
                 if 'N' in component_h5.attrs:
                     representation = 'particles'
@@ -2209,8 +2152,6 @@ class GadgetSnapshot:
 @cython.pheader(
     # Argument
     one_or_more_components=object,  # Component or container of Components
-    tensor_perturbations=object,    # the tensor perturbations to be saved
-    scalar_potential=object,        # the scalar potential we want to save
     filename=str,
     params=dict,
     snapshot_type=str,
@@ -2223,7 +2164,7 @@ class GadgetSnapshot:
     returns=str,
 )
 def save(
-    one_or_more_components, tensor_perturbations, scalar_potential, filename,
+    one_or_more_components, filename,
     params=None, snapshot_type=snapshot_type, save_all_components=False,
 ):
     """The type of snapshot to be saved may be given as the
@@ -2268,11 +2209,6 @@ def save(
     snapshot = eval(snapshot_type.capitalize() + 'Snapshot()')
     # Populate the snapshot with data
     snapshot.populate(components_selected, params)
-  
-    # Extra population of the tensor perturbations
-    snapshot.tensor_perturbations = list([tensor_perturbations])
-    snapshot.scalar_potentials = list([scalar_potential])
-
     # Make sure that the directory of the snapshot exists
     if master:
         os.makedirs(os.path.dirname(filename), exist_ok=True)
@@ -2614,7 +2550,6 @@ def get_initial_conditions(initial_conditions_touse=None, do_realization=True):
             name = species
         # Instantiate
         specifications = {key.replace(' ', '_'): value for key, value in specifications.items()}
-        masterprint(specifications)
         component = Component(name, species, **specifications)
         components.append(component)
     # Populate universals_dict['species_present']

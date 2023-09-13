@@ -2390,19 +2390,6 @@ cython.declare(
     enable_class_background='bint',
     # Hidden parameters
     special_params=dict,
-    # New parameters I added
-    NumSteps='int',
-    SaveInterval='int',
-    dConfTime='double',
-    gw_mesh_size='Py_ssize_t',
-    CosmoFile=str,
-    gwFile_0=str,
-    gwFile_1=str,
-    gwFile_2=str,
-    gwFile_3=str,
-    gwFile_4=str,
-    CheckPointInterval='int',
-    SmoothingKernelOrder='int',
 )
 # Input/output
 initial_conditions = user_params.get('initial_conditions', '')
@@ -2651,31 +2638,6 @@ class_extra_perturbations = set(
     str(el) for el in any2list(user_params.get('class_extra_perturbations', [])) if el
 )
 user_params['class_extra_perturbations'] = class_extra_perturbations
-
-# Extra things I (Josh) put in
-NumSteps = int(user_params.get('NumSteps', 1000))
-SaveInterval = int(user_params.get('SaveInterval', 100))
-dConfTime = float(user_params.get('dConfTime', .1*units.Mpc))
-gw_mesh_size = to_int(user_params.get('gw_mesh_size', 256))
-CosmoFile = str(user_params.get('CosmoFile', ''))
-
-gwFile_0 = str(user_params.get('gwFile_0', ''))
-gwFile_1 = str(user_params.get('gwFile_1', ''))
-gwFile_2 = str(user_params.get('gwFile_2', ''))
-gwFile_3 = str(user_params.get('gwFile_3', ''))
-gwFile_4 = str(user_params.get('gwFile_4', ''))
-CheckPointInterval = int(user_params.get('CheckPointInterval', 5*SaveInterval))
-SmoothingKernelOrder = int(user_params.get('SmoothingKernelOrder', 4))
-
-
-masterprint('Set Smoothing Kernel Order to: ', SmoothingKernelOrder)
-masterprint('Set NumSteps to :', NumSteps)
-masterprint('Set SaveInterval to :', SaveInterval)
-masterprint('Set dConfTime to :', dConfTime)
-masterprint('Set GW Mesh Size to: ', gw_mesh_size)
-masterprint('Loading Cosmology from: ', CosmoFile)
-
-
 # Numerical parameters
 boxsize = float(user_params.get('boxsize', 512*units.Mpc))
 user_params['boxsize'] = boxsize

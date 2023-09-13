@@ -6,80 +6,80 @@
 # CO𝘕CEPT directories #
 #######################
 # Top-level directory of the CO𝘕CEPT installation
-concept_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install'
+concept_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept'
 # Default build directory
-build_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/build'
+build_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/build'
 # Directory containing installed dependency programs
-dep_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/dep'
+dep_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/dep'
 # Directory containing documentation
-doc_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/doc'
+doc_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/doc'
 # Directory intended for initial conditions
-ic_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/ic'
+ic_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/ic'
 # Directory containing information for each job
-job_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/job'
+job_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/job'
 # Directory intended for output
-output_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/output'
+output_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/output'
 # Directory intended for parameter files
-param_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/param'
+param_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/param'
 # Directory containing reusable dumps
-reusable_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/.reusable'
+reusable_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/.reusable'
 # Directory containing source code
-src_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/src'
+src_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/src'
 # Directory containing tests
-test_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/test'
+test_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/test'
 # Directory used for temporary files
-tmp_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/.tmp'
+tmp_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/.tmp'
 # Directory containing utilities
-util_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/util'
+util_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/util'
 
 
 ##########################
 # Dependency directories #
 ##########################
 # Directory of BLAS
-blas_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/dep/openblas'
+blas_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/dep/openblas'
 # Directory of CLASS
-class_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/dep/class'
+class_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/dep/class'
 # Directory of FFTW
-fftw_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/dep/fftw'
+fftw_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/dep/fftw'
 # Directory of FFTW2, used by GADGET
-fftw_for_gadget_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/dep/gadget/fftw'
+fftw_for_gadget_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/dep/gadget/fftw'
 # Directory of GADGET2
-gadget_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/dep/gadget'
+gadget_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/dep/gadget'
 # Directory containing the GADGET2 source code
-Gadget2_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/dep/gadget/Gadget2'
+Gadget2_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/dep/gadget/Gadget2'
 # Directory of GSL
-gsl_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/dep/gsl'
+gsl_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/dep/gsl'
 # Directory of HDF5
-hdf5_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/dep/hdf5'
+hdf5_dir='/global/software/sl-7.x86_64/modules/gcc/12.1.0/hdf5/1.12.2-parallel'
 # Directories of MPI
 mpi_dir='/global/software/sl-7.x86_64/modules/gcc/12.1.0/openmpi/4.1.4'
 mpi_compilerdir='/global/software/sl-7.x86_64/modules/gcc/12.1.0/openmpi/4.1.4/bin'
 mpi_bindir='/global/software/sl-7.x86_64/modules/gcc/12.1.0/openmpi/4.1.4/bin'
 mpi_libdir='/global/software/sl-7.x86_64/modules/gcc/12.1.0/openmpi/4.1.4/lib'
 mpi_includedir='/global/software/sl-7.x86_64/modules/gcc/12.1.0/openmpi/4.1.4/include'
-mpi_symlinkdir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/dep/.mpi_symlinks'
+mpi_symlinkdir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/dep/.mpi_symlinks'
 # Directory of Python
-python_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/dep/python'
+python_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/dep/python'
 # Directory of zlib
-zlib_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/dep/zlib'
+zlib_dir='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/dep/zlib'
 
 
 #########
 # Files #
 #########
 # The executable script of the CO𝘕CEPT code
-concept='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/concept'
+concept='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/concept'
 # The file containing environment variables
-env='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/.env'
+env='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/.env'
 # The install script
-install='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/install'
+install='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/install'
 # The MPI C compiler
 mpicc='/global/software/sl-7.x86_64/modules/gcc/12.1.0/openmpi/4.1.4/bin/mpicc'
 # The MPI executable
 mpiexec='/global/software/sl-7.x86_64/modules/gcc/12.1.0/openmpi/4.1.4/bin/mpiexec'
 # The file containing paths (this file)
-path='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/.path'
+path='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/.path'
 # The Python interpreter
-python='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/concept_install/dep/python/bin/python3.9'
+python='/global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/dep/python/bin/python3.9'
 
