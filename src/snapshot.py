@@ -241,9 +241,8 @@ class ConceptSnapshot:
                     mom_h5 = component_h5.create_dataset('mom', (N, 3), dtype=C2np['double'])
                     pos_h5[start_local:end_local, :] = component.pos_mv3[:N_local, :]
                     mom_h5[start_local:end_local, :] = component.mom_mv3[:N_local, :]
-                    masterprint('done')
 
-                if component.representation == 'fluid':
+                if component.original_representation == 'fluid':
                     # Write out progress message
                     masterprint(
                         f'Writing out {component.name} ({component.species} with '

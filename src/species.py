@@ -48,8 +48,10 @@ cimport(
     '    domain_decompose,   '
     '    spectral_laplacian, '
     '    inverse_laplacian,  '
-    '    get_grad,           '
-    '    get_hesse,          '
+    '    slab_grad,           '
+    '    slab_hesse,         '
+    '    slab_decompose,     '
+    '    fft,                '
 )
 
 # Method for sourcing the decay radiation from the
@@ -1312,25 +1314,34 @@ class TensorField:
         source_ptr3='double*',
         source_ptr4='double*',
         index='Py_ssize_t',
+        slab='double[:, :, ::1]',
     )
     def add_potential(self, scalar_potential):
+
+        # Fluid scalar holding the scalar potential
         source_scalar = scalar_potential.fluidvar[0]
 
         # Pointer to the undifferentiated scalar potential
         source_ptr1 = source_scalar.grid
 
+        # Make a slab of the source grid
+        slab = slab_decompose(source_scalar.grid_mv, slab_or_buffer_name = 'potential slabs', prepare_fft = True)
+
+        # Do a forward FFT on the slab. We can now just copy and fourier operate
+        fft(slab, 'forward', apply_forward_normalization=True)
+
         for dim1 in range(3):
 
             # The Grad-i component
-            source_ptr2 = cython.address(get_grad(source_scalar.grid_mv, dim1, 'grad_i')[:, :, :])
+            source_ptr2 = cython.address(slab_grad(slab, dim1, 'grad_i')[:, :, :])
 
             for dim2 in range(dim1+1):
 
                 # The Grad-j component
-                source_ptr3 = cython.address(get_grad(source_scalar.grid_mv, dim2, 'grad_j')[:, :, :])
+                source_ptr3 = cython.address(slab_grad(slab, dim2, 'grad_j')[:, :, :])
 
                 # The Hessian component
-                source_ptr4 = cython.address(get_hesse(source_scalar.grid_mv, dim1, dim2, 'hesse_ij')[:, :, :])
+                source_ptr4 = cython.address(slab_hesse(slab, dim1, dim2, 'hesse_ij')[:, :, :])
 
                 # What we add to
                 field_scalar = self.fluidvar[dim1, dim2]
