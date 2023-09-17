@@ -317,10 +317,7 @@ class CosmoResults:
         #filename='/u/jwfoster/concept/.reusable/class/998b753a99.hdf5'
 
         gauge = (params if params else {}).get('gauge', 'synchronous').lower()
-        masterprint('Gauge:', gauge)
-  
         gauge = 'newtonian'
-        masterprint('Gauge:', gauge)
 
         self.needed_keys = {
             # Background data as function of time
@@ -2636,6 +2633,10 @@ def compute_cosmo(gridsize=-1, gauge='synchronous', filename='', class_call_reas
     N-body gauge is not implemented in CLASS.
     If a filename is given, CLASS results are loaded from this file.
     """
+
+    gauge = 'newtonian'
+    filename=CosmoFile
+
     # If a gauge is given explicitly as a CLASS parameter in the
     # parameter file, this gauge should overwrite what ever is passed
     # to this function.
@@ -2651,6 +2652,7 @@ def compute_cosmo(gridsize=-1, gauge='synchronous', filename='', class_call_reas
             f'In compute_cosmo, gauge was set to "{gauge}" but must be '
             f'either "synchronous" or "Newtonian"'
         )
+
     # If this exact CLASS computation has already been carried out,
     # return the stored results.
     cosmoresults = cosmoresults_cache.get((gridsize, gauge))
@@ -2740,7 +2742,7 @@ cosmoresults_cache = {}
 )
 def compute_transfer(
     component, variable, gridsize,
-    specific_multi_index=None, a=-1, a_next=-1, gauge='N-body', get='spline', weight=None,
+    specific_multi_index=None, a=-1, a_next=-1, gauge='newtonian', get='spline', weight=None,
 ):
     """This function calls compute_cosmo which produces a CosmoResults
     instance which can talk to CLASS. Using the δ, θ, etc. methods on
@@ -2760,6 +2762,10 @@ def compute_transfer(
             f'Gauge was set to "{gauge}" but must be one of '
             f'"N-body", "synchronous", "Newtonian"'
         )
+
+    masterprint('Gauge in compute transfer:', gauge)
+    gauge = 'newtonian'
+    masterprint('Gauge in compute transfer:', gauge)
     get = get.lower()
     if get not in ('spline', 'array'):
         abort(
