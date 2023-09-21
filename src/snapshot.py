@@ -365,7 +365,7 @@ class ConceptSnapshot:
             self.params['Ωcdm']    = hdf5_file.attrs[unicode('Ωcdm')]
             # Load component data
             for name, component_h5 in hdf5_file['components'].items():
-                if name == 'MetricPerturbations':
+                if name == 'MetricPerturbations' or name == 'ScalarPotential':
                     continue
 
                 # Determine representation from the snapshot
