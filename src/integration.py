@@ -631,9 +631,6 @@ def tau_to_app(tau=1):
 def a_to_app(a=1):
     return spline_tau_a.eval_deriv2(spline_a_tau.eval(a))
 
-
-
-
 # Function for computing the cosmic time t,
 # given a value for the scale factor.
 @cython.pheader(
@@ -873,7 +870,7 @@ spline_t_integrands = {}
 # will also be tabulated and stored in the module namespace in the
 # form of spline_a_t, spline_t_a and spline_a_H.
 def init_time(reinitialize=False):
-    global time_initialized, spline_a_t, spline_t_a, spline_a_H, spline_a_tau, spline_tau_a
+    global time_initialized, spline_a_t, spline_t_a, spline_a_H, spline_a_tau, spline_tau_a 
     # This is a pure function as it contains a closure.
     # Some type information is necessary.
     cython.declare(
@@ -884,6 +881,7 @@ def init_time(reinitialize=False):
         t_values='double[::1]',
         t_begin_correct='double',
         tau_values='double[::1]',
+        int_values='double[::1]',
     )
     if time_initialized and not reinitialize:
         return
@@ -1047,7 +1045,7 @@ cython.declare(time_initialized='bint')
 time_initialized = False
 
 # Global Spline objects defined by init_time
-cython.declare(spline_a_t='Spline', spline_t_a='Spline', spline_a_H='Spline', spline_a_tau='Spline', spline_tau_a='Spline')
+cython.declare(spline_a_t='Spline', spline_t_a='Spline', spline_a_H='Spline', spline_a_tau='Spline', spline_tau_a='Spline',)
 spline_a_t = None
 spline_t_a = None
 spline_a_H = None
