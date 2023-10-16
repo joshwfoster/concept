@@ -89,7 +89,7 @@ all-build: $(addsuffix .so, $(pyfiles))
 
 # Import variables from the main makefile
 # (must be placed below main target).
-include ../Makefile
+include /global/scratch/projects/pc_heptheory/fosterjw/EMDE_Collapse/my_concept/Makefile
 # Set heading text
 building = modules
 ifneq ($(build),)
