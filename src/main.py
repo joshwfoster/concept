@@ -277,6 +277,7 @@ def timeloop():
 
         Δt_max, bottleneck = get_base_timestep_size(components, static_timestepping_func)
         masterprint('Concept stepping (not used):', Δt_max, bottleneck)
+        masterprint('Step Ratio:', Δt_max/ Δt)
 
         ##################################################################################
         ###   Here we perform the predictor step for the u_{ij} evolution and update   ###
