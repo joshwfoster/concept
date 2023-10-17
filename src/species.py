@@ -49,10 +49,11 @@ cimport(
     '    domain_decompose,   '
     '    spectral_laplacian, '
     '    inverse_laplacian,  '
-    '    slab_grad,           '
+    '    slab_grad,          '
     '    slab_hesse,         '
     '    slab_decompose,     '
     '    fft,                '
+    '    deconvolve,         '
 )
 
 # Method for sourcing the decay radiation from the
@@ -1113,6 +1114,7 @@ class ScalarField:
         a = universals.a
 
         for component in components:
+            masterprint('Sourcing potential from:', component.name)
             w = component.w(a=universals.a)
             w_eff = component.w_eff(a = universals.a)
 
@@ -1129,6 +1131,11 @@ class ScalarField:
             for index in range(self.size):
                 field_ptr[index] += rho_prefactor * rho_ptr[index]
 
+            if component.original_representation =='particles':
+                deconvolve(field_scalar.grid_mv, SmoothingKernelOrder)
+                masterprint('Deconvolving the potential after sourcing from:', component.name)
+            
+
     @cython.pheader(
         index='Py_ssize_t',
         solution_ptr = 'double*',
@@ -1140,7 +1147,13 @@ class ScalarField:
 
         pot_factor = 4 * π * G_Newton/light_speed**2 * universals.a**2
         masterprint('Potential Factor:' , pot_factor)
-        self.add_sources(components)
+
+        # Source the decay radiation
+        if len(components) == 2:
+            if components[1].name == 'DecayRadiation':
+                self.add_sources([components[0], components[1]])
+            else:
+                self.add_sources([components[1], components[0]])
 
         field_scalar = self.fluidvar[0]
         field_ptr = field_scalar.grid

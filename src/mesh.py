@@ -1648,6 +1648,9 @@ def add_fluid_to_grid(component, grid, quantity, ᔑdt, factor=1, operation='+='
     # Locals
     J_dim='FluidScalar',
     dim='int',
+    ς_dim='FluidScalar',
+    dim1='int',
+    dim2='int',
     gridsize='Py_ssize_t',
     i='Py_ssize_t',
     j='Py_ssize_t',
@@ -1700,6 +1703,7 @@ def convert_particles_to_fluid(component, order):
             ς_dim = component.ς[dim1, dim2]
             interpolate_particles(component, gridsize, ς_dim.grid_mv, 'S' + 'xyz'[dim1] + 'xyz'[dim2], order, ᔑdt, factor = 0.5, do_ghost_communication = False)
             interpolate_particles(component, gridsize, ς_dim.grid_mv, 'S' + 'xyz'[dim1] + 'xyz'[dim2], order, ᔑdt, factor = 0.5, shift = 0.5)
+            deconvolve(ς_dim.grid_mv, order)
 
     return 0
 
@@ -2800,7 +2804,56 @@ def spectral_laplacian(grid):
     new_grid = get_buffer(shape, 'laplacian grid buffer', nullify = True)
     return domain_decompose(slab, new_grid, do_ghost_communication=True)
 
-# Function which inverts the laplacian
+# Function which deconvolves the field
+@cython.pheader(
+    # Arguments
+    grid='double[:, :, ::1]',
+    deconv_order='int',
+    # Locals
+    slab='double[:, :, ::1]',
+    slab_size_i='Py_ssize_t',
+    slab_size_j='Py_ssize_t',
+    slab_size_k='Py_ssize_t',
+    slab_ptr='double*',
+    gridsize='Py_ssize_t',
+    index='Py_ssize_t',
+    ki='Py_ssize_t',
+    kj='Py_ssize_t',
+    kk='Py_ssize_t',
+    k_unit='double',
+    factor='double',
+    θ='double',
+    re='double',
+    im='double',
+    shape=tuple,
+    returns='void',
+)
+def deconvolve(grid, deconv_order):
+    # Slab decompose and fourier transform the input grid
+    slab = slab_decompose(grid, slab_or_buffer_name = 'deconvolution slab buffer', prepare_fft = True)
+    fft(slab, 'forward', apply_forward_normalization=True)
+
+    # Extract slab shape and pointer
+    slab_size_j, slab_size_i, slab_size_k = asarray(slab).shape
+    slab_ptr = cython.address(slab[:, :, :])
+    gridsize = slab_size_i
+
+    for index, ki, kj, kk, factor, θ in fourier_loop(gridsize,with_nyquist=True, deconv_order=deconv_order):
+        
+        # Multiply by the deconvolution factor
+        slab_ptr[index    ] *= factor
+        slab_ptr[index + 1] *= factor
+
+    # Inverse fourier transformation
+    fft(slab, 'backward')
+  
+    # Create and fill the domain decomposed buffer
+    shape = get_gridshape_local(gridsize)
+
+    # I think I am doing this in place but I should be very careful here.
+    domain_decompose(slab, grid, do_ghost_communication=True)
+
+# Function which inverts the laplacian 
 @cython.pheader(
     # Arguments
     grid='double[:, :, ::1]',
@@ -2857,7 +2910,6 @@ def inverse_laplacian(grid):
     shape = get_gridshape_local(gridsize)
     new_grid = get_buffer(shape, 'inverse laplacian grid buffer', nullify = True)
     return domain_decompose(slab, new_grid, do_ghost_communication=True)
-
 
 
 # Function for nullifying sets of modes of Fourier space slabs

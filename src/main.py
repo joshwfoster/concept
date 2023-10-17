@@ -275,9 +275,18 @@ def timeloop():
         masterprint('Scale Factor:', universals.a)
         masterprint('Hubble:', hubble(universals.a))
 
+        # Before we can get a sensible bottleneck evaluation, must return things to their 
+        # original species. 
+        for component in components:
+            component.representation = component.original_representation
+
         Δt_max, bottleneck = get_base_timestep_size(components, static_timestepping_func)
         masterprint('Concept stepping (not used):', Δt_max, bottleneck)
         masterprint('Step Ratio:', Δt_max/ Δt)
+
+        # Now everything goes back to a fluid
+        for component in components:
+            component.representation = 'fluid'
 
         ##################################################################################
         ###   Here we perform the predictor step for the u_{ij} evolution and update   ###
