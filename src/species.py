@@ -56,6 +56,7 @@ cimport(
     '    deconvolve,         '
 )
 
+
 # Method for sourcing the decay radiation from the
 # decaying dark matter
 @cython.pheader(
@@ -64,110 +65,76 @@ cimport(
     receiver_component = 'Component',
     a1 = 'double',
     a2 = 'double',
-    # Donor Rho Quantities
-    donor_rho_scalar='FluidScalar',
-    donor_rho_grid='double*',
+    # Locals
+    donor_scalar='FluidScalar',
+    donor_grid='double*',
     donor_rho_total='double',
-    # Donor J Quantities
-    donor_Jx_scalar='FluidScalar',
-    donor_Jx_grid='double*',
-    donor_Jy_scalar='FluidScalar',
-    donor_Jy_grid='double*',
-    donor_Jz_scalar='FluidScalar',
-    donor_Jz_grid='double*',
-    # Receiver Rho Quantities
-    receiver_rho_scalar='FluidScalar',
-    receiver_rho_grid='double*',
+    receiver_scalar='FluidScalar',
+    receiver_grid='double*',
     receiver_rho_total='double',
-    # Receiver J Quantities
-    receiver_Jx_scalar='FluidScalar',
-    receiver_Jx_grid='double*',
-    receiver_Jy_scalar='FluidScalar',
-    receiver_Jy_grid='double*',
-    receiver_Jz_scalar='FluidScalar',
-    receiver_Jz_grid='double*',
-    # Remaining variables I need
     index='Py_ssize_t',
-    w_eff_1_donor = 'double',
-    w_eff_2_donor = 'double',
-    w_eff_1_receiver = 'double',
-    w_eff_2_receiver = 'double',
-    w_donor = 'double',
-    w_receiver = 'double',
-    rescale_factor = 'double',
-    rho_add_factor = 'double',
-    J_add_factor = 'double',
+    dim='Py_ssize_t',
+    w = 'double',
+    w_eff_1 = 'double',
+    w_eff_2 = 'double',
+    rescale_factor='double',
+    add_factor = 'double',
 )
 def source_decay(donor_component, receiver_component, a1, a2):
- 
-    #############################################
-    ###   Getting access to the donor grids   ###
-    #############################################
 
-    donor_rho_scalar = donor_component.ϱ
-    donor_rho_grid = donor_rho_scalar.grid
+    #######################################
+    ###   Sourcing the Energy Density   ###
+    #######################################
+
+    # The donor scalar and grid
+    donor_scalar = donor_component.ϱ
+    donor_grid = donor_scalar.grid
     donor_rho_total = donor_component._ϱ_bar
 
-    donor_Jx_scalar = donor_component.J[0]
-    donor_Jy_scalar = donor_component.J[1]
-    donor_Jz_scalar = donor_component.J[2]
-
-    donor_Jx_grid = donor_Jx_scalar.grid
-    donor_Jy_grid = donor_Jy_scalar.grid
-    donor_Jz_grid = donor_Jz_scalar.grid
-
-    w_eff_1_donor = donor_component.w_eff(a=a1)
-    w_eff_2_donor = donor_component.w_eff(a=a2)
-    w_donor = donor_component.w(a=a1)
-
-    ################################################
-    ###   Getting access to the receiver grids   ###
-    ################################################
-
-    receiver_rho_scalar = receiver_component.ϱ
-    receiver_rho_grid = receiver_rho_scalar.grid
+    # The receiver scalar and grid
+    receiver_scalar = receiver_component.ϱ
+    receiver_grid = receiver_scalar.grid
     receiver_rho_total = receiver_component._ϱ_bar
 
-    receiver_Jx_scalar = receiver_component.J[0]
-    receiver_Jy_scalar = receiver_component.J[1]
-    receiver_Jz_scalar = receiver_component.J[2]
+    # Here we calculate how much to homogeneously rescale out of the receiver density
+    w = receiver_component.w(a=a1)
+    w_eff_1 = receiver_component.w_eff(a = a1)
+    w_eff_2 = receiver_component.w_eff(a = a2)
 
-    receiver_Jx_grid = receiver_Jx_scalar.grid
-    receiver_Jy_grid = receiver_Jy_scalar.grid
-    receiver_Jz_grid = receiver_Jz_scalar.grid
+    # This rescales away the dependence on the effective equation of state
+    # so that the quantity a^3*ϱ is conserved.
+    rescale_factor = a2**(3 * (w_eff_2-w) ) / a1**(3 * (w_eff_1-w))
 
-    w_eff_1_receiver = receiver_component.w_eff(a=a1)
-    w_eff_2_receiver = receiver_component.w_eff(a=a2)
-    w_receiver = receiver_component.w(a=a1)
-
-    #########################################
-    ###   Now computing some prefactors   ###
-    #########################################
-
-    # This is 1-r12 in my notation
-    rescale_factor = a1**( 3 * (w_receiver - w_eff_1_receiver) ) /  a2**( 3 * (w_receiver - w_eff_2_receiver) )
-    rho_add_factor = (1 - rescale_factor) * receiver_rho_total / donor_rho_total
-    J_add_factor = a1**(3 * ( w_eff_1_donor - w_eff_1_receiver ) ) * rho_add_factor
-
-    masterprint('Rescale Factor:', rescale_factor)
-    masterprint('Rho Additive Factor:', rho_add_factor)
-    masterprint('J Additive Factor:', J_add_factor)
-
-    ###################################
-    ###   Now Let's Source Things   ###
-    ###################################
+    # This is how much total we took away from the receiver grid
+    add_factor = (1-rescale_factor) * receiver_rho_total / donor_rho_total
 
     for index in range(receiver_component.size):
+        receiver_grid[index] *= rescale_factor
+        receiver_grid[index] += add_factor * donor_grid[index]
 
-        # First we make the update to the density.
-        receiver_rho_grid[index] = rescale_factor * receiver_rho_grid[index] + rho_add_factor * donor_rho_grid[index]
+    #########################################
+    ###   Sourcing the Momentum Density   ###
+    #########################################
 
-        # Next we make an update to the current
-        receiver_Jx_grid[index] = rescale_factor * receiver_Jx_grid[index]  + J_add_factor * donor_Jx_grid[index]
-        receiver_Jy_grid[index] = rescale_factor * receiver_Jy_grid[index]  + J_add_factor * donor_Jy_grid[index]
-        receiver_Jz_grid[index] = rescale_factor * receiver_Jz_grid[index]  + J_add_factor * donor_Jz_grid[index]
- 
-    # Communicate the fluid grids to each other
+    w_eff_1 = donor_component.w_eff(a = a1)
+    w_eff_2 = donor_component.w_eff(a = a2)
+
+    # This is the mass loss fraction due to decay
+    rescale_factor = a1**(3*w_eff_1) / a2**(3*w_eff_2)
+
+    # This is now the fraction of momentum transferred to the fluid
+    rescale_factor = 1. - rescale_factor
+
+    for dim in range(3):
+        donor_scalar = donor_component.J[dim]
+        donor_grid = donor_scalar.grid
+
+        receiver_scalar = receiver_component.J[dim]
+        receiver_grid = receiver_scalar.grid
+
+        for index in range(receiver_component.size):
+            receiver_grid[index] += rescale_factor * donor_grid[index]
+
     receiver_component.communicate_fluid_grids('=')
 
 # Class which serves as the data structure for fluid variables,
@@ -1154,6 +1121,8 @@ class ScalarField:
                 self.add_sources([components[0], components[1]])
             else:
                 self.add_sources([components[1], components[0]])
+        else:
+            self.add_sources(components)
 
         field_scalar = self.fluidvar[0]
         field_ptr = field_scalar.grid
@@ -1423,8 +1392,8 @@ class TensorField:
         w = component.w(a=universals.a)
         w_eff = component.w_eff(a = universals.a)
 
-        JJ_prefactor = 32 * π * G_Newton / light_speed**4 * a**3
-        JJ_prefactor *= a**(3*w_eff - 1.) / (1 + w)
+        JJ_prefactor = 32 * π * G_Newton / light_speed**4 * a**3 
+        JJ_prefactor *= a**(3*w_eff - 3) / (1 + w)
 
         masterprint(component.name, JJ_prefactor)
 

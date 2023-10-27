@@ -1688,21 +1688,21 @@ def convert_particles_to_fluid(component, order):
     ϱ = component.ϱ.grid_mv
 
     masterprint('Meshing the energy density')
-    interpolate_particles(component, gridsize, ϱ, 'ϱ', order, ᔑdt, factor = 0.5, do_ghost_communication=False)
-    interpolate_particles(component, gridsize, ϱ, 'ϱ', order, ᔑdt, factor = 0.5, shift = 0.5)
+    interpolate_particles(component, gridsize, ϱ, 'ϱ', order, ᔑdt, factor = 1, do_ghost_communication=True)
+    #interpolate_particles(component, gridsize, ϱ, 'ϱ', order, ᔑdt, factor = 0.5, shift = 0.5)
 
     masterprint('Meshing the momentum density')
     for dim in range(3):
         J_dim = component.J[dim]
-        interpolate_particles(component, gridsize, J_dim.grid_mv, 'J' + 'xyz'[dim], order, ᔑdt, factor = 0.5, do_ghost_communication = False)
-        interpolate_particles(component, gridsize, J_dim.grid_mv, 'J' + 'xyz'[dim], order, ᔑdt, factor = 0.5, shift = 0.5)
+        interpolate_particles(component, gridsize, J_dim.grid_mv, 'J' + 'xyz'[dim], order, ᔑdt, factor = 1, do_ghost_communication = True)
+        #interpolate_particles(component, gridsize, J_dim.grid_mv, 'J' + 'xyz'[dim], order, ᔑdt, factor = 0.5, shift = 0.5)
 
     masterprint('Meshing the stress tensor')
     for dim1 in range(3):
         for dim2 in range(dim1, 3):
             ς_dim = component.ς[dim1, dim2]
-            interpolate_particles(component, gridsize, ς_dim.grid_mv, 'S' + 'xyz'[dim1] + 'xyz'[dim2], order, ᔑdt, factor = 0.5, do_ghost_communication = False)
-            interpolate_particles(component, gridsize, ς_dim.grid_mv, 'S' + 'xyz'[dim1] + 'xyz'[dim2], order, ᔑdt, factor = 0.5, shift = 0.5)
+            interpolate_particles(component, gridsize, ς_dim.grid_mv, 'S' + 'xyz'[dim1] + 'xyz'[dim2], order, ᔑdt, factor = 1, do_ghost_communication = True)
+            #interpolate_particles(component, gridsize, ς_dim.grid_mv, 'S' + 'xyz'[dim1] + 'xyz'[dim2], order, ᔑdt, factor = 0.5, shift = 0.5)
             deconvolve(ς_dim.grid_mv, order)
 
     return 0
