@@ -1098,9 +1098,9 @@ class ScalarField:
             for index in range(self.size):
                 field_ptr[index] += rho_prefactor * rho_ptr[index]
 
-            if component.original_representation =='particles':
-                deconvolve(field_scalar.grid_mv, SmoothingKernelOrder)
-                masterprint('Deconvolving the potential after sourcing from:', component.name)
+            #if component.original_representation =='particles':
+            #    deconvolve(field_scalar.grid_mv, SmoothingKernelOrder)
+            #    masterprint('Deconvolving the potential after sourcing from:', component.name)
             
 
     @cython.pheader(
