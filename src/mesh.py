@@ -4503,6 +4503,409 @@ def particle_interpolation_loop_CIC(
                 _index += 1
                 weight = ℝ[_weight_i*weights_y[_j]]*weights_z[_k]
                 yield _index, weight
+
+#########################################################
+###   Custom Particle Interpolators from gevolution   ###
+#########################################################
+
+@cython.iterator(
+    depends=[
+        # Global variables used by particle_interpolation_loop_CIC()
+        'weights_x',
+        'weights_y',
+        'weights_z',
+    ]
+)
+def Jx_Interpolation_Loop(
+    x, y, z, size_j, size_k, multiplier=1,
+    *,
+    apply_factor=False,
+):
+    # Cython declarations for variables used for the iteration,
+    # including all arguments and variables to yield.
+    # Do not write these using the decorator syntax above this function.
+    cython.declare(
+        # Arguments
+        x='double',
+        y='double',
+        z='double',
+        size_j='Py_ssize_t',
+        size_k='Py_ssize_t',
+        multiplier='double',
+        apply_factor='bint',
+        # Locals
+        _i='Py_ssize_t',
+        _index_i='Py_ssize_t',
+        _index_j='Py_ssize_t',
+        _index_weights_i='Py_ssize_t',
+        _index_weights_j='Py_ssize_t',
+        _index_weights_k='Py_ssize_t',
+        _j='Py_ssize_t',
+        _k='Py_ssize_t',
+        _weight_i='double',
+        # Yielded
+        _index='Py_ssize_t',
+        weight='double',
+    )
+    # Set interpolation weights and get grid indices
+    _index_weights_i = set_weights_NGP(x, weights_x)
+    _index_weights_j = set_weights_CIC(y, weights_y)
+    _index_weights_k = set_weights_CIC(z, weights_z)
+    # Iterate efficiently over the interpolation region,
+    # yielding the grid index and associated weight.
+    _index_i = (
+        ((_index_weights_i - 1)*size_j + (_index_weights_j - 1))*size_k
+        + _index_weights_k - 1
+    )
+    for _i in range(2):
+        _weight_i = weights_x[_i]
+        with unswitch(1):
+            if apply_factor:
+                _weight_i *= multiplier
+        _index_i += ℤ[size_j*size_k]
+        _index_j = _index_i
+        for _j in range(2):
+            _index_j += size_k
+            _index = _index_j
+            for _k in range(2):
+                _index += 1
+                weight = ℝ[_weight_i*weights_y[_j]]*weights_z[_k]
+                yield _index, weight
+
+
+@cython.iterator(
+    depends=[
+        # Global variables used by particle_interpolation_loop_CIC()
+        'weights_x',
+        'weights_y',
+        'weights_z',
+    ]
+)
+def Jy_Interpolation_Loop(
+    x, y, z, size_j, size_k, multiplier=1,
+    *,
+    apply_factor=False,
+):
+    # Cython declarations for variables used for the iteration,
+    # including all arguments and variables to yield.
+    # Do not write these using the decorator syntax above this function.
+    cython.declare(
+        # Arguments
+        x='double',
+        y='double',
+        z='double',
+        size_j='Py_ssize_t',
+        size_k='Py_ssize_t',
+        multiplier='double',
+        apply_factor='bint',
+        # Locals
+        _i='Py_ssize_t',
+        _index_i='Py_ssize_t',
+        _index_j='Py_ssize_t',
+        _index_weights_i='Py_ssize_t',
+        _index_weights_j='Py_ssize_t',
+        _index_weights_k='Py_ssize_t',
+        _j='Py_ssize_t',
+        _k='Py_ssize_t',
+        _weight_i='double',
+        # Yielded
+        _index='Py_ssize_t',
+        weight='double',
+    )
+    # Set interpolation weights and get grid indices
+    _index_weights_i = set_weights_CIC(x, weights_x)
+    _index_weights_j = set_weights_NGP(y, weights_y)
+    _index_weights_k = set_weights_CIC(z, weights_z)
+    # Iterate efficiently over the interpolation region,
+    # yielding the grid index and associated weight.
+    _index_i = (
+        ((_index_weights_i - 1)*size_j + (_index_weights_j - 1))*size_k
+        + _index_weights_k - 1
+    )
+    for _i in range(2):
+        _weight_i = weights_x[_i]
+        with unswitch(1):
+            if apply_factor:
+                _weight_i *= multiplier
+        _index_i += ℤ[size_j*size_k]
+        _index_j = _index_i
+        for _j in range(2):
+            _index_j += size_k
+            _index = _index_j
+            for _k in range(2):
+                _index += 1
+                weight = ℝ[_weight_i*weights_y[_j]]*weights_z[_k]
+                yield _index, weight
+
+
+
+@cython.iterator(
+    depends=[
+        # Global variables used by particle_interpolation_loop_CIC()
+        'weights_x',
+        'weights_y',
+        'weights_z',
+    ]
+)
+def Jz_Interpolation_Loop(
+    x, y, z, size_j, size_k, multiplier=1,
+    *,
+    apply_factor=False,
+):
+    # Cython declarations for variables used for the iteration,
+    # including all arguments and variables to yield.
+    # Do not write these using the decorator syntax above this function.
+    cython.declare(
+        # Arguments
+        x='double',
+        y='double',
+        z='double',
+        size_j='Py_ssize_t',
+        size_k='Py_ssize_t',
+        multiplier='double',
+        apply_factor='bint',
+        # Locals
+        _i='Py_ssize_t',
+        _index_i='Py_ssize_t',
+        _index_j='Py_ssize_t',
+        _index_weights_i='Py_ssize_t',
+        _index_weights_j='Py_ssize_t',
+        _index_weights_k='Py_ssize_t',
+        _j='Py_ssize_t',
+        _k='Py_ssize_t',
+        _weight_i='double',
+        # Yielded
+        _index='Py_ssize_t',
+        weight='double',
+    )
+    # Set interpolation weights and get grid indices
+    _index_weights_i = set_weights_CIC(x, weights_x)
+    _index_weights_j = set_weights_CIC(y, weights_y)
+    _index_weights_k = set_weights_NGP(z, weights_z)
+    # Iterate efficiently over the interpolation region,
+    # yielding the grid index and associated weight.
+    _index_i = (
+        ((_index_weights_i - 1)*size_j + (_index_weights_j - 1))*size_k
+        + _index_weights_k - 1
+    )
+    for _i in range(2):
+        _weight_i = weights_x[_i]
+        with unswitch(1):
+            if apply_factor:
+                _weight_i *= multiplier
+        _index_i += ℤ[size_j*size_k]
+        _index_j = _index_i
+        for _j in range(2):
+            _index_j += size_k
+            _index = _index_j
+            for _k in range(2):
+                _index += 1
+                weight = ℝ[_weight_i*weights_y[_j]]*weights_z[_k]
+                yield _index, weight
+
+@cython.iterator(
+    depends=[
+        # Global variables used by particle_interpolation_loop_CIC()
+        'weights_x',
+        'weights_y',
+        'weights_z',
+    ]
+)
+def Sxy_Interpolation_Loop(
+    x, y, z, size_j, size_k, multiplier=1,
+    *,
+    apply_factor=False,
+):
+    # Cython declarations for variables used for the iteration,
+    # including all arguments and variables to yield.
+    # Do not write these using the decorator syntax above this function.
+    cython.declare(
+        # Arguments
+        x='double',
+        y='double',
+        z='double',
+        size_j='Py_ssize_t',
+        size_k='Py_ssize_t',
+        multiplier='double',
+        apply_factor='bint',
+        # Locals
+        _i='Py_ssize_t',
+        _index_i='Py_ssize_t',
+        _index_j='Py_ssize_t',
+        _index_weights_i='Py_ssize_t',
+        _index_weights_j='Py_ssize_t',
+        _index_weights_k='Py_ssize_t',
+        _j='Py_ssize_t',
+        _k='Py_ssize_t',
+        _weight_i='double',
+        # Yielded
+        _index='Py_ssize_t',
+        weight='double',
+    )
+    # Set interpolation weights and get grid indices
+    _index_weights_i = set_weights_NGP(x, weights_x)
+    _index_weights_j = set_weights_NGP(y, weights_y)
+    _index_weights_k = set_weights_CIC(z, weights_z)
+    # Iterate efficiently over the interpolation region,
+    # yielding the grid index and associated weight.
+    _index_i = (
+        ((_index_weights_i - 1)*size_j + (_index_weights_j - 1))*size_k
+        + _index_weights_k - 1
+    )
+    for _i in range(2):
+        _weight_i = weights_x[_i]
+        with unswitch(1):
+            if apply_factor:
+                _weight_i *= multiplier
+        _index_i += ℤ[size_j*size_k]
+        _index_j = _index_i
+        for _j in range(2):
+            _index_j += size_k
+            _index = _index_j
+            for _k in range(2):
+                _index += 1
+                weight = ℝ[_weight_i*weights_y[_j]]*weights_z[_k]
+                yield _index, weight
+
+
+
+@cython.iterator(
+    depends=[
+        # Global variables used by particle_interpolation_loop_CIC()
+        'weights_x',
+        'weights_y',
+        'weights_z',
+    ]
+)
+def Sxz_Interpolation_Loop(
+    x, y, z, size_j, size_k, multiplier=1,
+    *,
+    apply_factor=False,
+):
+    # Cython declarations for variables used for the iteration,
+    # including all arguments and variables to yield.
+    # Do not write these using the decorator syntax above this function.
+    cython.declare(
+        # Arguments
+        x='double',
+        y='double',
+        z='double',
+        size_j='Py_ssize_t',
+        size_k='Py_ssize_t',
+        multiplier='double',
+        apply_factor='bint',
+        # Locals
+        _i='Py_ssize_t',
+        _index_i='Py_ssize_t',
+        _index_j='Py_ssize_t',
+        _index_weights_i='Py_ssize_t',
+        _index_weights_j='Py_ssize_t',
+        _index_weights_k='Py_ssize_t',
+        _j='Py_ssize_t',
+        _k='Py_ssize_t',
+        _weight_i='double',
+        # Yielded
+        _index='Py_ssize_t',
+        weight='double',
+    )
+    # Set interpolation weights and get grid indices
+    _index_weights_i = set_weights_NGP(x, weights_x)
+    _index_weights_j = set_weights_CIC(y, weights_y)
+    _index_weights_k = set_weights_NGP(z, weights_z)
+    # Iterate efficiently over the interpolation region,
+    # yielding the grid index and associated weight.
+    _index_i = (
+        ((_index_weights_i - 1)*size_j + (_index_weights_j - 1))*size_k
+        + _index_weights_k - 1
+    )
+    for _i in range(2):
+        _weight_i = weights_x[_i]
+        with unswitch(1):
+            if apply_factor:
+                _weight_i *= multiplier
+        _index_i += ℤ[size_j*size_k]
+        _index_j = _index_i
+        for _j in range(2):
+            _index_j += size_k
+            _index = _index_j
+            for _k in range(2):
+                _index += 1
+                weight = ℝ[_weight_i*weights_y[_j]]*weights_z[_k]
+                yield _index, weight
+
+
+@cython.iterator(
+    depends=[
+        # Global variables used by particle_interpolation_loop_CIC()
+        'weights_x',
+        'weights_y',
+        'weights_z',
+    ]
+)
+def Syz_Interpolation_Loop(
+    x, y, z, size_j, size_k, multiplier=1,
+    *,
+    apply_factor=False,
+):
+    # Cython declarations for variables used for the iteration,
+    # including all arguments and variables to yield.
+    # Do not write these using the decorator syntax above this function.
+    cython.declare(
+        # Arguments
+        x='double',
+        y='double',
+        z='double',
+        size_j='Py_ssize_t',
+        size_k='Py_ssize_t',
+        multiplier='double',
+        apply_factor='bint',
+        # Locals
+        _i='Py_ssize_t',
+        _index_i='Py_ssize_t',
+        _index_j='Py_ssize_t',
+        _index_weights_i='Py_ssize_t',
+        _index_weights_j='Py_ssize_t',
+        _index_weights_k='Py_ssize_t',
+        _j='Py_ssize_t',
+        _k='Py_ssize_t',
+        _weight_i='double',
+        # Yielded
+        _index='Py_ssize_t',
+        weight='double',
+    )
+    # Set interpolation weights and get grid indices
+    _index_weights_i = set_weights_CIC(x, weights_x)
+    _index_weights_j = set_weights_NGP(y, weights_y)
+    _index_weights_k = set_weights_NGP(z, weights_z)
+    # Iterate efficiently over the interpolation region,
+    # yielding the grid index and associated weight.
+    _index_i = (
+        ((_index_weights_i - 1)*size_j + (_index_weights_j - 1))*size_k
+        + _index_weights_k - 1
+    )
+    for _i in range(2):
+        _weight_i = weights_x[_i]
+        with unswitch(1):
+            if apply_factor:
+                _weight_i *= multiplier
+        _index_i += ℤ[size_j*size_k]
+        _index_j = _index_i
+        for _j in range(2):
+            _index_j += size_k
+            _index = _index_j
+            for _k in range(2):
+                _index += 1
+                weight = ℝ[_weight_i*weights_y[_j]]*weights_z[_k]
+                yield _index, weight
+
+
+
+#################################
+###   End New Contributions   ###
+#################################
+
+
+
 # Triangular-shaped cloud (TSC) interpolation (order 3)
 @cython.iterator(
     depends=[
