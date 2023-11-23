@@ -242,7 +242,7 @@ class ConceptSnapshot:
                     pos_h5[start_local:end_local, :] = component.pos_mv3[:N_local, :]
                     mom_h5[start_local:end_local, :] = component.mom_mv3[:N_local, :]
 
-                if component.representation == 'fluid':
+                if component.original_representation == 'fluid':
                     if component.original_representation == 'particles':
                         masterprint('done')
 

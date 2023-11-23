@@ -3922,6 +3922,7 @@ class Component:
                 )
             # Reduce all momenta, corresponding to the loss of mass
             if self.representation == 'particles':
+                masterprint('Reducing momentum by factor: ', mom_decay_factor)
                 mom = self.mom
                 for indexʳ in range(3*self.N_local):
                     mom[indexʳ] *= mom_decay_factor

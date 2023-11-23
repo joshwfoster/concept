@@ -2245,6 +2245,8 @@ def get_slab_domain_decomposition_chunk_size(slab, grid_noghosts):
                 n_chunks += 1
     return n_chunks, thickness_chunk
 
+
+
 # Iterator implementing looping over Fourier space slabs.
 # The yielded values are the linear index into the slab, the physical
 # ki, kj, kk (in grid units), the combined factor due to deconvolution
@@ -2297,6 +2299,7 @@ def fourier_loop(
         deconv_order='int',
         interlace_flag='int',
         with_nyquist='bint',
+        factor='double',
         # Locals
         _deconv_i_denom='double',
         _deconv_i_numer='double',
@@ -2397,11 +2400,13 @@ def fourier_loop(
                 # The j-component of the wave vector (grid units)
                 _j_global = _offset_j + _j
                 kj = _j_global - ℤ[gridsize*_j_chunk]
+
                 # Bail out if beyond maximum frequency
                 with unswitch(3):
                     if k2_max != -1:
                         if ℤ[kj**2] > k2_max:
                             continue
+
                 # The j-component of the 1D NGP deconvolution factor.
                 # This is given by
                 #   deconv_1D_NGP = 1/sinc(ky*Δx/2)
@@ -2482,7 +2487,7 @@ def fourier_loop(
                         index += 2
                         # Combined factor for deconvolution
                         # and interlacing.
-                        factor = 1
+                        factor = 1.
                         # The full deconvolution factor
                         with unswitch(5):
                             if deconv_order:
@@ -2519,6 +2524,120 @@ def fourier_loop(
                                 ]
                         # Yield the needed variables
                         yield index, ki, kj, kk, factor, θ
+
+# My loop
+@cython.iterator
+def nyquist_loop(
+    gridsize, gridsize_corrections=-1,
+    i_bgn=0, i_end=None,
+    j_bgn=0, j_end=None,
+    *,
+    sparse=False, skip_origin=False, k2_max=-1,
+    deconv_order=0, interlace_flag=False,
+):
+    # Cython declarations for variables used for the iteration,
+    # including all arguments and variables to yield.
+    # Do not write these using the decorator syntax above this function.
+    cython.declare(
+        # Arguments
+        gridsize='Py_ssize_t',
+        gridsize_corrections='Py_ssize_t',
+        i_bgn='Py_ssize_t',
+        i_end=object,
+        j_bgn='Py_ssize_t',
+        j_end=object,
+        sparse='bint',
+        skip_origin='bint',
+        k2_max='Py_ssize_t',
+        deconv_order='int',
+        interlace_flag='int',
+        with_nyquist='bint',
+        # Locals
+        _deconv_i_denom='double',
+        _deconv_i_numer='double',
+        _deconv_ij_denom='double',
+        _deconv_ij_numer='double',
+        _deconv_j_denom='double',
+        _deconv_j_numer='double',
+        _deconv_k_denom='double',
+        _deconv_k_numer='double',
+        _i='Py_ssize_t',
+        _i_chunk='int',
+        _i_chunk_bgn='Py_ssize_t',
+        _i_chunk_end='Py_ssize_t',
+        _i_end='Py_ssize_t',
+        _index_ij='Py_ssize_t',
+        _index_j='Py_ssize_t',
+        _j='Py_ssize_t',
+        _j_chunk='int',
+        _j_chunk_bgn='Py_ssize_t',
+        _j_chunk_end='Py_ssize_t',
+        _j_end='Py_ssize_t',
+        _j_global='Py_ssize_t',
+        _j_global_bgn='Py_ssize_t',
+        _j_global_chunk_bgn='Py_ssize_t',
+        _j_global_chunk_end='Py_ssize_t',
+        _j_global_end='Py_ssize_t',
+        _kk_bgn='Py_ssize_t',
+        _nyquist='Py_ssize_t',
+        _nyquist_plus='Py_ssize_t',
+        _offset_j='Py_ssize_t',
+        _slab_size_i='Py_ssize_t',
+        _slab_size_j='Py_ssize_t',
+        _slab_size_k='Py_ssize_t',
+        # Yielded
+        index='Py_ssize_t',
+        ki='Py_ssize_t',
+        kj='Py_ssize_t',
+        kk='Py_ssize_t',
+        θ='double',
+    )
+    # Set up slab shape
+    _nyquist = gridsize//2
+
+    _slab_size_j = gridsize//nprocs
+    _slab_size_i = gridsize
+    _slab_size_k = gridsize + 2
+
+    # Use this to get the absolute location
+    _offset_j = _slab_size_j*rank
+
+    # Always do the full loop
+    _j_end = _slab_size_j
+    _i_end = _slab_size_i
+
+    # This is an offset factor 
+    _offset_j = _slab_size_j*rank
+    _j_global_bgn = _offset_j +  j_bgn
+    _j_global_end = _offset_j + _j_end
+
+    for _j in range(0, _slab_size_j):
+
+        # Get the value of kj
+        _j_global = _offset_j + _j
+        if _j < gridsize // 2:
+            kj = _j
+        else:
+            kj = _j - gridsize
+
+        for _i in range(0, _slab_size_i):
+ 
+            # Get the value of ki
+            if _i < gridsize // 2:
+                ki = _i
+            else:
+                ki = _i - gridsize
+
+            for _k in range(0, (_slab_size_k) // 2):
+                index = _j * (_slab_size_i * _slab_size_k) + _i * _slab_size_k + 2*_k
+
+                if _k < gridsize // 2:
+                    kk = _k
+                else:
+                    kk = _k - gridsize
+
+
+                yield index, ki, kj, kk, 1., 0.
 
 # Function performing in-place deconvolution and/or interlacing
 # and/or differentiation of Fourier slabs.
@@ -2612,6 +2731,7 @@ def fourier_operate(slab, deconv_order=0, interlace_flag=0, diff_dim=-1):
         slab_ptr[index + 1] = im
     return slab
 
+
 # Function returning the spectral laplacian as applied to a grid
 @cython.pheader(
     # Arguments
@@ -2677,6 +2797,7 @@ def slab_grad(input_slab, diff_dim, grad_name):
         slab_ptr[index + 1] = im * factor
     
     # Inverse fourier transformation
+    nullify_modes(slab, 'nyquist')
     fft(slab, 'backward')
 
     # Create an Empty Buffer to Domain Decompose
@@ -2742,13 +2863,13 @@ def slab_hesse(input_slab, diff_dim_i, diff_dim_j, hesse_name):
         slab_ptr[index + 1] *= factor
     
     # Inverse fourier transformation
+    nullify_modes(slab, 'nyquist')
     fft(slab, 'backward')
 
     # Create an Empty Buffer to Domain Decompose
     shape = get_gridshape_local(gridsize)
     new_grid = get_buffer(shape, 'hesse grid buffer' + hesse_name, nullify = True)
     return domain_decompose(slab, new_grid, do_ghost_communication=True)
-
 
 # Function returning the spectral laplacian as applied to a grid
 @cython.pheader(
@@ -2786,11 +2907,11 @@ def spectral_laplacian(grid):
     gridsize = slab_size_i
 
     # Get the fundamental wavenumber in units of 1/Mpc 
-    k_unit = ℝ[2*π / (boxsize * units.Mpc)]
+    k_unit = ℝ[2*π / (boxsize)]
  
     for index, ki, kj, kk, factor, θ in fourier_loop(gridsize,with_nyquist=True):
 
-        factor *= -k_unit * k_unit * (ki * ki + kj * kj + kk * kk)
+        factor *= -k_unit*k_unit * (ki*ki + kj*kj + kk*kk)
 
         # Extract real and imag part of slab
         slab_ptr[index    ] *= factor
@@ -2878,31 +2999,31 @@ def deconvolve(grid, deconv_order):
     returns='double[:, :, ::1]',
 )
 def inverse_laplacian(grid):
-    
+
     # Slab decompose and fourier transform the input grid
     slab = slab_decompose(grid, slab_or_buffer_name = 'inverse laplacian slab buffer', prepare_fft = True)
-    fft(slab, 'forward', apply_forward_normalization=True)    
+    fft(slab, 'forward', apply_forward_normalization=True)
 
     # Extract slab shape and pointer
     slab_size_j, slab_size_i, slab_size_k = asarray(slab).shape
     slab_ptr = cython.address(slab[:, :, :])
     gridsize = slab_size_i
 
-    # Get the fundamental wavenumber in units of 1/Mpc 
-    k_unit = ℝ[2*π / (boxsize * units.Mpc)]
- 
+    # Get the fundamental wavenumber in units of 1/Mpc
+    k_unit = ℝ[2*π / (boxsize)]
+
     for index, ki, kj, kk, factor, θ in fourier_loop(gridsize,with_nyquist=True):
 
-        factor *= -k_unit * k_unit * (ki * ki + kj * kj + kk * kk)
+        factor *= -k_unit*k_unit * (ki*ki + kj*kj + kk*kk)
         if ki == 0 and kj == 0 and kk == 0:
             factor = 0
         else:
-            factor = 1/factor
+            factor = 1./factor
 
         # Extract real and imag part of slab
         slab_ptr[index    ] *= factor
         slab_ptr[index + 1] *= factor
-    
+
     # Inverse fourier transformation
     fft(slab, 'backward')
 
